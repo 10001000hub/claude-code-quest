@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CLAUDE CODE QUEST v1 — RPG型Claude Code学習アプリ</title>
+<!-- ドット字フォント（オンライン時のみ。オフライン時はMSゴシックで代替表示） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   CLAUDE CODE QUEST v1 — ドラクエ風 RPG型Claude Code学習アプリ（単一HTML）
+   操作: 十字キー（↑↓←→）＋ Enter のみで全操作可能（マウス併用可）
+   進捗保存: ブラウザのlocalStorage
+   ============================================================ */
+:root{
+  --px:4px;
+  --white:#f8f8f8; --blue:#3b8bff; --gold:#ffd75e;
+  --green:#5ad66a; --red:#ff5a5a; --gray:#9aa0a8; --dim:#555;
+}
+*{ margin:0; padding:0; box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  background:#000; color:var(--white);
+  font-family:'DotGothic16','ＭＳ ゴシック','MS Gothic',monospace;
+  font-size:19px; line-height:1.75; overflow-x:hidden;
+  -webkit-font-smoothing:none;
+}
+body::after{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:99;
+  background:repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 4px);
+}
+#stage{ max-width:940px; margin:0 auto; padding:20px 12px 60px;
+  min-height:100vh; display:flex; flex-direction:column; gap:16px; }
+.screen{ display:none; flex-direction:column; gap:16px; animation:appear .18s steps(3); }
+.screen.active{ display:flex; }
+@keyframes appear{ from{opacity:0;} to{opacity:1;} }
+#fader{ position:fixed; inset:0; background:#000; z-index:98; pointer-events:none;
+  opacity:0; transition:opacity .14s steps(4); }
+#fader.on{ opacity:1; }
+
+/* ---------- ウィンドウ ---------- */
+.win{
+  background:#000; border:4px solid var(--white); border-radius:10px;
+  box-shadow: inset 0 0 0 3px #000, inset 0 0 0 5px var(--white);
+  padding:16px 20px; position:relative;
+}
+.win .win-title{ position:absolute; top:-15px; left:18px; background:#000;
+  padding:0 10px; font-size:15px; letter-spacing:2px; }
+.win.gold{ border-color:var(--gold); box-shadow: inset 0 0 0 3px #000, inset 0 0 0 5px var(--gold); }
+.win.gold .win-title{ color:var(--gold); }
+
+/* ---------- 点滅・メニュー ---------- */
+.blink{ animation:blink 1s steps(2) infinite; }
+@keyframes blink{ 50%{opacity:0;} }
+.menu{ list-style:none; }
+.menu li{ padding:4px 8px 4px 38px; position:relative; cursor:pointer; }
+.menu li::before{ content:'▶'; position:absolute; left:8px; opacity:0; }
+.menu li.sel::before{ opacity:1; animation:blink .8s steps(2) infinite; }
+.menu li.disabled{ color:var(--dim); cursor:default; }
+.menu li small{ color:var(--gray); font-size:14px; }
+.menu li.done-item{ color:var(--gray); }
+.msgwin{ min-height:110px; font-size:20px; }
+.msgwin p{ white-space:pre-line; }   /* typewriteはtextContent方式。改行はCSSで */
+.msgwin .cursor-down{ position:absolute; right:22px; bottom:8px; font-size:15px;
+  animation:bob 1s steps(2) infinite; }
+@keyframes bob{ 50%{ transform:translateY(4px);} }
+
+/* ---------- チェックリスト（メニュー内） ---------- */
+.menu li.chk::after{ content:'▢'; position:absolute; left:26px; }
+.menu li.chk{ padding-left:56px; }
+.menu li.chk.done-item::after{ content:'▣'; color:var(--green); }
+
+/* ---------- タイトル ---------- */
+#scr-title{ align-items:center; justify-content:center; min-height:86vh; text-align:center; }
+.title-logo{ font-size:62px; letter-spacing:8px; line-height:1.2;
+  text-shadow:4px 4px 0 #14337a; animation:logoIn 1.2s steps(8) both; }
+.title-sub{ font-size:19px; color:var(--gold); letter-spacing:4px; margin-top:8px; }
+@keyframes logoIn{ from{transform:translateY(-40px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+.title-sea{ font-size:22px; color:#3b6fd4; letter-spacing:6px; margin-top:16px; }
+.title-sea span{ display:inline-block; animation:wave 2.4s ease-in-out infinite; }
+.title-sea span:nth-child(2n){ animation-delay:.4s; }
+.title-sea span:nth-child(3n){ animation-delay:.8s; }
+@keyframes wave{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+#title-menu{ margin-top:26px; display:inline-block; text-align:left; min-width:340px; }
+
+/* ---------- なまえ入力（かな文字盤） ---------- */
+.name-preview{ font-size:30px; letter-spacing:10px; text-align:center; margin:6px 0 14px; }
+.kana-grid{ display:grid; grid-template-columns:repeat(10,1fr); gap:4px;
+  font-size:21px; text-align:center; max-width:560px; margin:0 auto; }
+.kana-cell{ padding:5px 2px; cursor:pointer; border-radius:6px; white-space:nowrap; }
+.kana-cell.cmd{ color:var(--gold); font-size:17px; }
+.kana-cell.sel{ background:#1b2a4a; outline:3px solid var(--gold); }
+
+/* ---------- ステータス・ゲージ ---------- */
+.status-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width:660px){ .status-grid{ grid-template-columns:1fr; } }
+.stat-row{ display:flex; justify-content:space-between; gap:12px; }
+.stat-row .v{ color:var(--gold); }
+.gauge{ letter-spacing:1px; font-size:17px; }
+.gauge .fill{ color:var(--green); }
+.gauge .rest{ color:#333; }
+.badges div{ margin:2px 0; }
+.badges .off{ color:var(--dim); }
+
+/* ---------- クエスト本文ページャ ---------- */
+.quest-head{ color:var(--gold); font-size:23px; letter-spacing:2px; }
+.pager-nav{ display:flex; justify-content:space-between; align-items:center;
+  font-size:16px; color:var(--gray); }
+.qbody{ min-height:220px; white-space:pre-wrap; font-size:18px; }
+.qbody .em{ color:var(--gold); }
+.arrow-hint{ color:var(--gold); }
+.arrow-hint.dim{ color:var(--dim); }
+
+/* ---------- バトル ---------- */
+#battle-field{ min-height:250px; display:flex; align-items:center;
+  justify-content:center; position:relative; overflow:hidden; }
+#battle-field.shake{ animation:shake .3s steps(6); }
+@keyframes shake{ 0%,100%{transform:translate(0,0);} 25%{transform:translate(-8px,4px);}
+  50%{transform:translate(8px,-4px);} 75%{transform:translate(-6px,-2px);} }
+.sprite{ position:relative; }
+.sprite .body{ animation:idle 1.6s steps(2) infinite; }
+@keyframes idle{ 50%{ transform:translateY(calc(var(--px) * 1)) scaleY(.96);} }
+.sprite.hit .body{ animation:hitflash .36s steps(6); }
+@keyframes hitflash{ 0%,40%,80%{filter:brightness(6);} 20%,60%,100%{filter:none;} }
+.sprite.dead{ animation:melt .9s steps(8) forwards; }
+@keyframes melt{ to{ transform:scaleY(0); transform-origin:bottom; opacity:0; } }
+.dmg{ position:absolute; left:50%; top:8%; transform:translateX(-50%);
+  font-size:34px; text-shadow:3px 3px 0 #a00; opacity:0; pointer-events:none; }
+.dmg.pop{ animation:dmgpop .8s steps(8) forwards; }
+@keyframes dmgpop{ 0%{opacity:0; transform:translate(-50%,10px);}
+  20%{opacity:1; transform:translate(-50%,-14px);}
+  80%{opacity:1; transform:translate(-50%,-6px);} 100%{opacity:0;} }
+#battle-field .flash-red{ animation:redflash .3s steps(3); }
+@keyframes redflash{ 50%{ box-shadow: inset 0 0 0 999px rgba(255,0,0,.25);} }
+.enemy-name{ text-align:center; font-size:16px; color:var(--gray); }
+.battle-hud{ display:flex; justify-content:space-between; font-size:16px; color:var(--gray); }
+.battle-hud .mhp{ color:var(--red); }
+.kaisetsu{ font-size:16px; color:#cfe3ff; border-top:2px solid #333; margin-top:8px; padding-top:6px; white-space:pre-line; }
+
+/* ---------- ドット絵 ---------- */
+.pix{ width:var(--px); height:var(--px); }
+.thumb .pix{ --px:3px; }
+#enemy.boss .pix{ --px:6px; }
+
+/* ---------- 図鑑 ---------- */
+.zukan-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; }
+.zukan-card{ display:flex; gap:14px; align-items:center; min-height:112px; }
+.zukan-card .thumb{ flex:0 0 76px; display:flex; justify-content:center; }
+.zukan-card h4{ font-size:17px; color:var(--gold); margin-bottom:2px; }
+.zukan-card p{ font-size:14px; color:var(--gray); line-height:1.5; }
+.zukan-card.unknown h4{ color:var(--dim); }
+
+/* ---------- 掟 ---------- */
+.okite p{ margin:8px 0; font-size:16px; }
+.okite b{ color:var(--gold); }
+
+/* ---------- 日誌 ---------- */
+.log-list{ list-style:none; font-size:16px; max-height:280px; overflow-y:auto; }
+.log-list li{ padding:2px 0; color:var(--gray); }
+.log-list li b{ color:var(--white); }
+textarea.dq{ width:100%; min-height:200px; background:#000; color:var(--white);
+  border:3px solid var(--gray); border-radius:8px; padding:10px;
+  font-family:inherit; font-size:14px; }
+
+/* ---------- チュートリアル（Claude Code拡張 基本操作 模型UI） ---------- */
+#om{ border-radius:10px; overflow:hidden; background:#1b1d22; color:#c9ccd1;
+  font-family:'Segoe UI','Hiragino Sans',sans-serif; font-size:13px; line-height:1.5;
+  border:1px solid #34373e; }
+#om-titlebar{ background:#111216; padding:6px 12px; display:flex; align-items:center; gap:6px;
+  border-bottom:1px solid #2a2d33; font-size:12px; color:#8b8f97; }
+.tl{ width:11px; height:11px; border-radius:50%; display:inline-block; }
+.tl.r{ background:#ff5f57; } .tl.y{ background:#febc2e; } .tl.g{ background:#28c840; }
+#om-titlebar .apptitle{ margin-left:8px; }
+#om-body{ display:grid; grid-template-columns:1fr 230px; min-height:300px; }
+@media (max-width:720px){ #om-body{ grid-template-columns:1fr 170px; } }
+#om-side{ display:none; background:#16171b; border-right:1px solid #2a2d33; padding:8px 6px; min-width:0; }
+#om-tab-term, #om-tab-diff, #om-agent{ display:inline-block !important; }
+#om-diff-body{ margin-top:2px; }
+.om-nav{ display:flex; flex-direction:column; gap:2px; color:#8b8f97; margin-bottom:10px; }
+.om-nav span{ padding:2px 8px; }
+.om-sec{ font-size:10px; letter-spacing:1px; color:#6b6f77; padding:6px 8px 2px;
+  display:flex; justify-content:space-between; align-items:center; }
+.om-sec .cnt{ background:#2a2d33; border-radius:8px; padding:0 6px; font-size:10px; }
+.om-row{ padding:4px 8px; margin:1px 0; border-radius:6px; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+.om-row.selrow{ background:#24262c; }
+.om-row .dot{ display:inline-block; width:8px; height:8px; border-radius:50%;
+  background:#565b64; margin-right:6px; }
+.om-row .dot.green{ background:#3fb950; }
+.om-row .dot.busy{ background:#3fb950; animation:blink 1s steps(2) infinite; }
+.pill{ background:#2a2d33; color:#9aa0a8; border-radius:4px; padding:0 5px;
+  font-size:10px; margin-left:6px; }
+.om-sub{ font-size:11px; color:#8b8f97; padding-left:14px; }
+.om-mini{ float:right; color:#8b8f97; padding:0 6px; border-radius:4px; }
+.om-row.add{ color:#8b8f97; margin-top:10px; border:1px dashed #3a3d44; text-align:center; }
+#om-main{ display:flex; flex-direction:column; min-width:0; background:#141519; }
+#om-tabs{ display:flex; gap:2px; background:#111216; border-bottom:1px solid #2a2d33;
+  padding:4px 6px 0; font-size:12px; }
+.om-tab{ background:#1b1d22; color:#8b8f97; padding:3px 12px; border-radius:6px 6px 0 0; }
+.om-tab.active{ background:#141519; color:#e2e4e8; }
+.om-tab.plus{ background:none; }
+.om-tab .reddot{ color:#e0524d; }
+#om-term{ flex:1; padding:8px 12px; font-family:'DotGothic16','ＭＳ ゴシック',monospace;
+  font-size:12.5px; color:#d6d8dc; overflow-y:auto; max-height:230px; position:relative; }
+.om-combo{ display:inline-block; background:#1f2127; border:1px solid #3a3d44;
+  border-radius:6px; padding:2px 10px; margin-bottom:8px; color:#c9ccd1; font-size:12px; }
+#om-term .om-sys{ color:#8b8f97; }
+#om-term .om-ai{ color:#8fc7ff; }
+#om-term .om-banner{ color:#e0a458; }
+.om-status{ margin-top:8px; padding-top:6px; border-top:1px solid #2a2d33;
+  color:#e0a458; font-size:11.5px; }
+#om-diff{ flex:1; padding:8px 12px; font-size:12.5px; overflow-y:auto; max-height:230px; }
+.om-diff-head{ display:flex; justify-content:space-between; align-items:center;
+  color:#e2e4e8; padding-bottom:6px; border-bottom:1px solid #2a2d33; }
+.om-commit{ background:#238636; color:#fff; border-radius:6px; padding:2px 12px; font-size:12px; }
+.om-diff-file{ color:#c9ccd1; padding:6px 0 4px; }
+.om-diff-file .plus{ color:#3fb950; } .om-diff-file .minus{ color:#e0524d; }
+.dl{ display:flex; gap:0; font-family:'DotGothic16','ＭＳ ゴシック',monospace; font-size:12px; }
+.dl .ln{ width:26px; flex:0 0 26px; text-align:right; padding-right:8px; color:#565b64; }
+.dl code{ white-space:pre-wrap; }
+.dl.addl{ background:rgba(63,185,80,.15); }
+.dl.addl code{ color:#7ee2a8; }
+#om-right{ background:#16171b; border-left:1px solid #2a2d33; padding:8px 6px; }
+.om-file{ padding:2px 8px; color:#8b8f97; font-size:12px; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+#om-bottombar{ background:#111216; border-top:1px solid #2a2d33; padding:4px 12px;
+  display:flex; justify-content:space-between; font-size:11px; color:#8b8f97; }
+.om-hl{ outline:3px solid var(--gold); outline-offset:1px;
+  animation:blink .8s steps(2) infinite; color:#fff !important; }
+
+/* ---------- 操作ヒント ---------- */
+.mock-note{ font-size:13px; color:#666; text-align:center; }
+.kbd-note{ font-size:13px; color:#666; }
+.keyhint{ font-size:14px; color:var(--gray); text-align:center; }
+.keyhint b{ color:var(--gold); font-weight:normal; }
+
+/* ---------- レベルアップ・エンディング ---------- */
+#levelup{ position:fixed; left:50%; top:38%; transform:translate(-50%,-50%);
+  z-index:97; display:none; text-align:center; min-width:340px; }
+#levelup.show{ display:block; animation:appear .2s steps(3); }
+#levelup .lv{ font-size:30px; color:var(--gold); }
+.ending-roll{ text-align:center; font-size:19px; line-height:2.4; }
+.ending-roll .big{ font-size:30px; color:var(--gold); letter-spacing:4px; }
+
+/* ---------- 仮想コントローラ（タッチ端末用） ---------- */
+#pad{
+  display:none; position:fixed; left:0; right:0; bottom:10px; z-index:95;
+  padding:0 14px; justify-content:space-between; align-items:flex-end;
+  pointer-events:none;
+}
+#pad-dpad{ display:grid; grid-template-columns:repeat(3,54px); grid-template-rows:repeat(3,54px); gap:4px; }
+#pad button{
+  pointer-events:auto; font-family:inherit; cursor:pointer;
+  background:rgba(0,0,0,.72); color:var(--white);
+  border:3px solid var(--white); border-radius:12px;
+  font-size:20px; touch-action:manipulation;
+  user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
+}
+#pad button:active{ background:#1b2a4a; }
+.pd.up{ grid-area:1/2; } .pd.left{ grid-area:2/1; } .pd.right{ grid-area:2/3; } .pd.down{ grid-area:3/2; }
+#pad-a{ width:84px; height:84px; border-radius:50% !important;
+  font-size:22px; color:var(--gold) !important; border-color:var(--gold) !important; }
+/* タッチ主体の端末でのみ表示 */
+@media (pointer:coarse){
+  #pad{ display:flex; }
+  #stage{ padding-bottom:190px; }
+}
+
+/* ---------- スマホサイズ調整 ---------- */
+@media (max-width:600px){
+  body{ font-size:16px; }
+  #stage{ padding:12px 8px 190px; gap:12px; }
+  .win{ padding:12px 14px; }
+  .title-logo{ font-size:42px; letter-spacing:5px; }
+  .title-sub{ font-size:15px; letter-spacing:2px; }
+  #title-menu{ min-width:280px; }
+  .msgwin{ font-size:17px; min-height:96px; }
+  .menu li{ padding:5px 6px 5px 32px; }
+  .menu li::before{ left:6px; }
+  .menu li small{ font-size:12px; }
+  .qbody{ font-size:15px; min-height:150px; }
+  .quest-head{ font-size:19px; }
+  .name-preview{ font-size:24px; letter-spacing:6px; }
+  .kana-grid{ font-size:17px; gap:2px; }
+  .kana-cell.cmd{ font-size:13px; }
+  #battle-field{ min-height:180px; }
+  .dmg{ font-size:26px; }
+  .keyhint{ font-size:12px; }
+  .kbd-note{ font-size:11px; }
+  #om-body{ min-height:220px; }
+  #om-term{ font-size:11px; max-height:160px; }
+  #om-diff{ font-size:11px; }
+  .log-list{ max-height:200px; font-size:14px; }
+  .ending-roll{ font-size:16px; line-height:2.1; }
+  .ending-roll .big{ font-size:22px; }
+}
+</style>
+</head>
+<body>
+<div id="fader"></div>
+
+<!-- 保存失敗の警告（save()失敗時に表示される） -->
+<div class="win" id="save-warn" style="display:none; position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:96; border-color:var(--red); box-shadow: inset 0 0 0 3px #000, inset 0 0 0 5px var(--red); font-size:14px; padding:8px 16px; max-width:90vw;">
+  ⚠ ぼうけんのしょ が保存できていません。ブラウザの設定（プライベートモード等）や容量を確認してください。この警告が出ている間に閉じると、進捗が消えます。
+</div>
+
+<!-- レベルアップ演出 -->
+<div class="win gold" id="levelup">
+  <p class="lv">レベルアップ！</p>
+  <p id="levelup-text"></p>
+  <p class="blink" style="font-size:14px;">▼ Enter で とじる</p>
+</div>
+
+<!-- 仮想コントローラ（タッチ端末で自動表示。キーボードと同じ操作を発行する） -->
+<div id="pad">
+  <div id="pad-dpad">
+    <button class="pd up" data-k="ArrowUp">▲</button>
+    <button class="pd left" data-k="ArrowLeft">◀</button>
+    <button class="pd right" data-k="ArrowRight">▶</button>
+    <button class="pd down" data-k="ArrowDown">▼</button>
+  </div>
+  <button id="pad-a" data-k="Enter">Ａ</button>
+</div>
+
+<div id="stage">
+
+  <!-- ============ タイトル ============ -->
+  <section class="screen active" id="scr-title">
+    <div>
+      <div class="title-logo">CLAUDE CODE<br>QUEST</div>
+      <div class="title-sub">〜五つの秘伝と魔導工房〜</div>
+      <div class="title-sea">
+        <span>～</span><span>～</span><span>～</span><span>～</span><span>～</span><span>～</span><span>～</span><span>～</span><span>～</span><span>～</span>
+      </div>
+      <div class="win" id="title-menu">
+        <ul class="menu" id="title-menu-list">
+          <li data-act="continue">つづきから</li>
+          <li data-act="new">はじめから</li>
+        </ul>
+      </div>
+      <p class="keyhint" style="margin-top:18px;"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝けってい</p>
+      <p class="mock-note" style="margin-top:10px;">v1 ／ 進捗はこのブラウザ内に自動保存されます</p>
+    </div>
+  </section>
+
+  <!-- ============ なまえ入力（かな文字盤） ============ -->
+  <section class="screen" id="scr-name" style="align-items:center; justify-content:center; min-height:80vh;">
+    <div class="win" style="min-width:min(620px,94vw);">
+      <span class="win-title">なまえを いれてください（8文字まで）</span>
+      <p class="name-preview" id="name-preview"></p>
+      <div class="kana-grid" id="kana-grid"></div>
+      <p class="keyhint" style="margin-top:14px;"><b>↑↓←→</b>＝もじをえらぶ　<b>Enter</b>＝けってい　（「けす」＝1文字けす　「おわり」＝かんりょう）</p>
+    </div>
+  </section>
+
+  <!-- ============ チュートリアル（Claude Code拡張の基本操作） ============ -->
+  <section class="screen" id="scr-tutorial">
+    <div class="win">
+      <span class="win-title">チュートリアル — Claude Code拡張の基本操作（画面を再現した模型）</span>
+      <div id="om">
+        <div id="om-titlebar"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><span class="apptitle">コードエディタ</span></div>
+        <div id="om-body">
+          <div id="om-side"></div>
+          <div id="om-main">
+            <div id="om-tabs">
+              <span class="om-tab active" id="om-tab-term">▸ session</span>
+              <span class="om-tab" id="om-tab-diff">SKILL.md</span>
+              <span class="om-tab plus">＋</span>
+            </div>
+            <div id="om-term">
+              <div class="om-combo" id="om-agent">セッション: <span id="om-agent-name">rpg-learning-app</span></div>
+              <div id="om-term-lines"><div class="om-sys">（ここにClaude Codeとのやり取りが表示される）</div></div>
+              <div class="om-status" id="om-statusline" style="display:none;"></div>
+            </div>
+            <div id="om-diff" style="display:none;">
+              <div class="om-diff-head"><b id="om-diff-filename">ファイル名</b><span class="om-commit" id="om-commitbtn" style="display:none;">Commit</span></div>
+              <div id="om-diff-body"></div>
+            </div>
+          </div>
+          <div id="om-right">
+            <div class="om-sec">EXPLORER</div>
+            <div class="om-file" id="cc-file-claude">▸ .claude</div>
+            <div class="om-file" id="cc-file-settings" style="display:none; padding-left:22px;">settings.json</div>
+            <div class="om-file" id="cc-file-skills" style="display:none; padding-left:22px;">▸ skills</div>
+            <div class="om-file" id="cc-file-skillmd" style="display:none; padding-left:36px;">example-skill/SKILL.md</div>
+            <div class="om-file" id="cc-file-agents" style="display:none; padding-left:22px;">▸ agents</div>
+            <div class="om-file" id="cc-file-claudemd" style="display:none;">CLAUDE.md</div>
+            <div class="om-file">▸ docs</div>
+            <div class="om-file">README.md</div>
+            <div class="om-file">.gitignore</div>
+          </div>
+        </div>
+        <div id="om-bottombar"><span>⚡ 78% 5h · 94% wk</span><span id="om-branch" style="display:none;">⎇ main</span></div>
+      </div>
+    </div>
+    <div class="win msgwin">
+      <span class="win-title">ガイド</span>
+      <p id="tut-msg"></p>
+      <span class="cursor-down" id="tut-cursor" style="display:none;">▼</span>
+    </div>
+    <div class="win" id="tut-cmd" style="display:none;">
+      <span class="win-title">どうする？</span>
+      <ul class="menu" id="tut-menu"></ul>
+    </div>
+    <p class="keyhint"><b>Enter</b>＝すすむ／おす　<b>↑↓</b>＝えらぶ　<b>←</b>＝中断メニュー（ギルドへ戻れる）</p>
+  </section>
+
+  <!-- ============ ギルド（ホーム／ハブ） ============ -->
+  <section class="screen" id="scr-home">
+    <div class="status-grid">
+      <div class="win">
+        <span class="win-title">つよさ</span>
+        <div id="status-box"></div>
+      </div>
+      <div class="win">
+        <span class="win-title">バッジ・きろく</span>
+        <div class="badges" id="badge-box"></div>
+      </div>
+    </div>
+    <div class="win msgwin">
+      <span class="win-title">ギルドうけつけ</span>
+      <p id="home-msg"></p>
+      <span class="cursor-down" id="home-cursor" style="display:none;">▼</span>
+    </div>
+    <div class="win">
+      <span class="win-title">めいれい</span>
+      <ul class="menu" id="home-menu">
+        <li data-go="scr-tutorial" id="tut-item">チュートリアル　—　Claude Code拡張の基本操作</li>
+        <li data-go="scr-map">ちず　—　クエストへ しゅっぱつ</li>
+        <li data-go="scr-arena">とうぎじょう　—　総合バトルクイズ</li>
+        <li data-go="scr-jissen">じっせん　—　実物のClaude Codeでやる課題</li>
+        <li data-go="scr-zukan">ずかん　—　モンスター討伐記録</li>
+        <li data-go="scr-okite">おきて　—　ギルドの安全ルール</li>
+        <li data-go="scr-log">にっし　—　記録とMarkdown書き出し</li>
+        <li id="sndtoggle">おと：ON</li>
+      </ul>
+    </div>
+    <p class="keyhint"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝けってい（メッセージ表示中の<b>Enter</b>＝はやおくり）</p>
+  </section>
+
+  <!-- ============ ちず ============ -->
+  <section class="screen" id="scr-map">
+    <div class="win">
+      <span class="win-title">しゅぎょうの ちず — 秘伝への道すじ</span>
+      <ul class="menu" id="map-list"></ul>
+      <p class="kbd-note">●＝クリアずみ（復習できる）　▶＝ちょうせんできる　・＝まだ行けない</p>
+    </div>
+    <p class="keyhint"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝しゅっぱつ</p>
+  </section>
+
+  <!-- ============ クエスト本文 ============ -->
+  <section class="screen" id="scr-quest">
+    <div class="win">
+      <span class="win-title" id="quest-no">クエスト</span>
+      <p class="quest-head" id="quest-name"></p>
+      <p style="color:var(--gray); font-size:15px;" id="quest-sub"></p>
+    </div>
+    <div class="win">
+      <span class="win-title" id="qpage-title">ページ</span>
+      <div class="qbody" id="qpage-body"></div>
+    </div>
+    <div class="pager-nav">
+      <span class="arrow-hint" id="qprev-hint">◀ ←キー＝まえのページ</span>
+      <span id="qpage-pos"></span>
+      <span class="arrow-hint" id="qnext-hint">→キー＝つぎのページ ▶</span>
+    </div>
+    <div class="win">
+      <span class="win-title">どうする？</span>
+      <ul class="menu" id="quest-menu">
+        <li data-act="battle" id="quest-battle-item">バトルへ すすむ</li>
+        <li data-act="back">ちずへ もどる</li>
+      </ul>
+    </div>
+    <p class="keyhint"><b>←→</b>＝ページおくり　<b>↑↓</b>＝コマンド　<b>Enter</b>＝けってい</p>
+  </section>
+
+  <!-- ============ バトル ============ -->
+  <section class="screen" id="scr-battle">
+    <div class="battle-hud">
+      <span id="hud-player"></span>
+      <span id="hud-enemy" class="mhp"></span>
+    </div>
+    <div class="win" id="battle-field">
+      <div class="sprite" id="enemy"><div class="body"><div class="pix" id="enemy-pix"></div></div></div>
+      <div class="dmg" id="dmgnum">10</div>
+    </div>
+    <p class="enemy-name" id="enemy-name"></p>
+    <div class="win msgwin">
+      <span class="win-title">バトル</span>
+      <p id="battle-msg"></p>
+      <div class="kaisetsu" id="battle-kaisetsu" style="display:none;"></div>
+      <span class="cursor-down" id="battle-cursor" style="display:none;">▼</span>
+    </div>
+    <div class="win" id="battle-cmd" style="display:none;">
+      <span class="win-title">どうする？</span>
+      <ul class="menu" id="battle-menu"></ul>
+    </div>
+    <p class="keyhint"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝けってい／メッセージおくり</p>
+  </section>
+
+  <!-- ============ とうぎじょう ============ -->
+  <section class="screen" id="scr-arena">
+    <div class="win">
+      <span class="win-title">とうぎじょう — 総合バトルクイズ（教材J章）</span>
+      <p style="font-size:16px; color:var(--gray);">くり返し挑戦できる。同じ問題での経験値は初回正解のみ。</p>
+      <ul class="menu" id="arena-menu"></ul>
+    </div>
+    <p class="keyhint"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝けってい</p>
+  </section>
+
+  <!-- ============ じっせん ============ -->
+  <section class="screen" id="scr-jissen">
+    <div class="win">
+      <span class="win-title">じっせんクエスト — 実物のClaude Codeでやる課題</span>
+      <p style="font-size:16px; color:var(--gray);">実際にClaude Codeを操作する課題。アプリ外での作業＋自己申告チェック。<br>詳しい手順は教材本文のG章・K章を読むこと。</p>
+      <ul class="menu" id="jissen-menu"></ul>
+    </div>
+    <div class="win" id="jissen-detail" style="display:none;">
+      <span class="win-title" id="jissen-title"></span>
+      <p id="jissen-desc" style="font-size:16px;"></p>
+      <ul class="menu" id="jissen-check"></ul>
+    </div>
+    <p class="keyhint"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝チェックつけはずし／けってい</p>
+  </section>
+
+  <!-- ============ ずかん ============ -->
+  <section class="screen" id="scr-zukan">
+    <div class="win">
+      <span class="win-title" id="zukan-title">モンスターずかん</span>
+      <p style="font-size:15px; color:var(--gray);">クエストのバトルで倒すと すがたが記録される。</p>
+    </div>
+    <div class="zukan-grid" id="zukan-grid"></div>
+    <p class="keyhint"><b>Enter</b>＝ギルドへ もどる</p>
+  </section>
+
+  <!-- ============ おきて ============ -->
+  <section class="screen" id="scr-okite">
+    <div class="win">
+      <span class="win-title">冒険者ギルドの掟（教材H章・全12条）</span>
+      <div class="okite" id="okite-body"></div>
+      <ul class="menu" id="okite-menu" style="margin-top:10px;"></ul>
+    </div>
+    <p class="keyhint"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝けってい</p>
+  </section>
+
+  <!-- ============ にっし ============ -->
+  <section class="screen" id="scr-log">
+    <div class="win">
+      <span class="win-title">こうかい日誌（自動記録）</span>
+      <ul class="log-list" id="log-list"></ul>
+      <ul class="menu" id="log-menu" style="margin-top:10px;"></ul>
+      <textarea class="dq" id="log-md" style="display:none;" readonly></textarea>
+      <p class="kbd-note" id="log-copy-note" style="display:none;">↑ 書き出したら Ctrl＋A → Ctrl＋C でコピーし、ObsidianのLEARNING_LOG.mdへ貼り付け（ここだけはコピー操作が必要）</p>
+    </div>
+    <p class="keyhint"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝けってい</p>
+  </section>
+
+  <!-- ============ エンディング ============ -->
+  <section class="screen" id="scr-ending">
+    <div class="win gold" style="padding:40px 20px;">
+      <div class="ending-roll" id="ending-roll"></div>
+    </div>
+    <p class="keyhint"><b>Enter</b>＝ギルドへ もどる</p>
+  </section>
+
+  <p class="mock-note">CLAUDE CODE QUEST v1／非公式ファンメイド教材／教材正本: CLAUDE_CODE_RPG_LEARNING_FOR_AI_USERS.md／2026年7月時点のClaude Code仕様準拠</p>
+</div>
+<script>
+/* ============================================================
+   基盤: 効果音・ドット絵・タイプライター・メニュー・画面切替・セーブ
+   操作方針: すべて 十字キー＋Enter で完結（マウスは補助として併用可）
+   ============================================================ */
+
+/* ---------- 効果音（WebAudio 短いビープ） ---------- */
+let sndOn = true, actx = null;
+function beep(freqs, dur, type){
+  if(!sndOn) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    let t = actx.currentTime;
+    freqs.forEach(f=>{
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type=type||'square'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.045,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t); o.stop(t+dur); t+=dur*0.9;
+    });
+  }catch(e){}
+}
+const SFX = {
+  move:  ()=>beep([1046],.05),
+  ok:    ()=>beep([660,1320],.07),
+  msg:   ()=>beep([880],.03),
+  dmg:   ()=>beep([180,140],.12,'sawtooth'),
+  miss:  ()=>beep([220,180,140],.12,'triangle'),
+  exp:   ()=>beep([523,659,784,1046],.09),
+  lvup:  ()=>beep([523,659,784,1046,1319,1568],.11),
+  stairs:()=>beep([392,523],.06),
+  save:  ()=>beep([784,784],.08),
+};
+
+/* ---------- ドット絵スプライト ---------- */
+const SPRITES = {
+  slime: [
+    "......OOOO......",
+    ".....OBBBBO.....",
+    "....OBBBBBBO....",
+    "...OBBBBBBBBO...",
+    "..OBBBBBBBBBBO..",
+    ".OBBWWBBBBWWBBO.",
+    ".OBBWKBBBBWKBBO.",
+    ".OBBBBBBBBBBBBO.",
+    "OBBKBBBBBBBBKBBO",
+    "OBBBKKKKKKKKBBBO",
+    "OBDBBBBBBBBBBDBO",
+    "OBDDBBBBBBBBDDBO",
+    ".ODDDDDDDDDDDDO.",
+    "..OOOOOOOOOOOO..",
+  ],
+  goblin: [
+    "..O..........O..",
+    ".OBO........OBO.",
+    ".OBBOOOOOOOOBBO.",
+    ".OBBBBBBBBBBBBO.",
+    ".OBWWBBBBBBWWBO.",
+    ".OBWKBBBBBBWKBO.",
+    ".OBBBBBBBBBBBBO.",
+    ".OBBBKKKKKKBBBO.",
+    "..OBBBBBBBBBBO..",
+    "...OODDDDDDOO...",
+    "..OBDODDDDODBO..",
+    ".OBBO.ODDO.OBBO.",
+    "..OO..ODDO..OO..",
+    "......O..O......",
+  ],
+  mimic: [
+    "..OOOOOOOOOOOO..",
+    ".OBBBBBBBBBBBBO.",
+    "OBBDBBDBBDBBDBBO",
+    "OBBBBBBBBBBBBBBO",
+    "OKKKKKKKKKKKKKKO",
+    "OKWKKWWKKWWKKWKO",
+    "OKKRKKKRRKKKRKKO",
+    "OKWKKWKKWKKWKKWO",
+    "OBBBBBBBBBBBBBBO",
+    "OBBDBBDBBDBBDBBO",
+    "OBBBBBBBBBBBBBBO",
+    "OBDDDDDDDDDDDDBO",
+    ".OOOOOOOOOOOOOO.",
+  ],
+  ghost: [
+    ".....OOOOOO.....",
+    "....OBBBBBBO....",
+    "...OBBBBBBBBO...",
+    "..OBBKBBBBKBBO..",
+    "..OBBKBBBBKBBO..",
+    "..OBBBBBBBBBBO..",
+    "..OBBBKKKKBBBO..",
+    "..OBBBBBBBBBBO..",
+    "..OBBBBBBBBBBO..",
+    "..OBBOBBBBOBBO..",
+    "..OBO.OBBO.OBO..",
+    "..OO...OO...OO..",
+  ],
+  wisp: [
+    ".......B........",
+    "......BB.....B..",
+    ".....BBBB...BB..",
+    "....BBBBBB.BB...",
+    "...BBWWWWBBB....",
+    "..BBWWWWWWBB....",
+    "..BBWKWWKWWBB...",
+    "..BBWWWWWWWBB...",
+    "...BBWKKWWBB....",
+    "....BBWWWBB.....",
+    ".....BBBBB......",
+    "......BBB.......",
+  ],
+  demon: [
+    ".OO..........OO.",
+    "OWWO........OWWO",
+    ".OWWOOOOOOOOWWO.",
+    "..OBBBBBBBBBBO..",
+    ".OBBBBBBBBBBBBO.",
+    ".OBRRBBBBBBRRBO.",
+    ".OBRKBBBBBBRKBO.",
+    ".OBBBBBBBBBBBBO.",
+    ".OBBWKWKWKWKBBO.",
+    "..OBBBBBBBBBBO..",
+    ".OBDOBDDDDOBDBO.",
+    "OBDO.ODDDO.ODBO.",
+    ".OO..ODDDO..OO..",
+    ".....O...O......",
+  ],
+  dragon: [
+    "..O..........O..",
+    ".OWO........OWO.",
+    ".OBBO......OBBO.",
+    "..OBBOOOOOOBBO..",
+    "..OBBBBBBBBBBO..",
+    ".OBRRBBBBBBRRBO.",
+    ".OBBBBBBBBBBBBO.",
+    ".OBWWWWWWWWWWBO.",
+    "..OBBBBBBBBBBO..",
+    ".OBBODBBBBDOBBO.",
+    "OBBO.ODDDDO.OBBO",
+    "OBO..ODDDDO..OBO",
+    ".O..ODDDDDDO..O.",
+    ".....OOOOOO.....",
+  ],
+};
+const PALETTES = {
+  grayslime: { O:'#bbb',    B:'#8a93a3', D:'#5d6673', W:'#fff', K:'#000', R:'#f66' },
+  blue:      { O:'#f8f8f8', B:'#3b8bff', D:'#1f5fd6', W:'#fff', K:'#000', R:'#f66' },
+  green:     { O:'#f8f8f8', B:'#3fbf4f', D:'#2a8f39', W:'#fff', K:'#000', R:'#f66' },
+  purple:    { O:'#f8f8f8', B:'#a86bff', D:'#7a3fd6', W:'#fff', K:'#000', R:'#f66' },
+  brown:     { O:'#f8f8f8', B:'#b8813f', D:'#8a5c26', W:'#fff', K:'#1a0d00', R:'#ff4444' },
+  pale:      { O:'#f8f8f8', B:'#cfd6e8', D:'#9aa4c0', W:'#fff', K:'#000', R:'#f66' },
+  yellow:    { O:'#f8f8f8', B:'#ffd75e', D:'#d6a52e', W:'#fff', K:'#000', R:'#f66' },
+  reddemon:  { O:'#f8f8f8', B:'#e0524d', D:'#a8302c', W:'#ffe9b0', K:'#000', R:'#ffd75e' },
+  bluebeast: { O:'#f8f8f8', B:'#4a6db8', D:'#2e4a8a', W:'#fff', K:'#000', R:'#ffd75e' },
+  lich:      { O:'#f8f8f8', B:'#7fd6a8', D:'#4a9a72', W:'#fff', K:'#000', R:'#f66' },
+  greendrag: { O:'#f8f8f8', B:'#4faf5f', D:'#2f7a3f', W:'#ffe9b0', K:'#000', R:'#ffd75e' },
+  bossdrag:  { O:'#e8d9ff', B:'#5a2e8a', D:'#3a1560', W:'#ffd75e', K:'#000', R:'#ff4444' },
+  shadow:    { O:'#222', B:'#222', D:'#1a1a1a', W:'#222', K:'#222', R:'#222' },
+};
+function renderSprite(el, name, palName){
+  const map = SPRITES[name], pal = PALETTES[palName];
+  const px = parseFloat(getComputedStyle(el).getPropertyValue('--px')) || 4;
+  const shadows = [];
+  map.forEach((row,y)=>{ [...row].forEach((ch,x)=>{
+    if(ch==='.') return;
+    shadows.push(`${x*px}px ${y*px}px 0 0 ${pal[ch]||'#f00'}`);
+  });});
+  el.style.boxShadow = shadows.join(',');
+  el.style.marginRight = (map[0].length*px)+'px';
+  el.style.marginBottom = (map.length*px)+'px';
+}
+
+/* ---------- タイプライター＋メッセージ送り状態 ----------
+   TYPE.active … 文字送り中（Enterで早送り）
+   msgAdvance … ▼待ち状態でEnterを押した時に実行する処理 ---------- */
+const TYPE = { el:null, active:false };
+let msgAdvance = null;
+function typewrite(el, text, cursorEl, done){
+  clearTimeout(el._timer);
+  /* textContent＋CSSのpre-lineで表示（HTML解釈を避ける。Codexレビュー反映） */
+  el.textContent=''; el._skip=false;
+  TYPE.el = el; TYPE.active = true;
+  if(cursorEl) cursorEl.style.display='none';
+  let i=0;
+  function step(){
+    if(el._skip){ el.textContent = text; finish(); return; }
+    if(i<text.length){
+      el.textContent += text[i++];
+      if(i%3===0) SFX.msg();
+      el._timer=setTimeout(step,30);
+    } else finish();
+  }
+  function finish(){
+    TYPE.active = false;
+    if(cursorEl) cursorEl.style.display='';
+    if(done) done();
+  }
+  step();
+}
+
+/* ---------- メニュー（十字キー＋Enter。マウスは補助） ----------
+   ←→ は ↑↓ と同じ扱い（縦メニューでも迷わないように） ---------- */
+function bindMenu(ul, onSelect){
+  const items=()=>[...ul.querySelectorAll('li:not(.disabled)')];
+  let idx=0;
+  /* 項目数が減った時に選択位置が範囲外に残らないようクランプ（レビュー反映） */
+  function clamp(){ const n=items().length; if(idx>=n) idx=Math.max(0,n-1); }
+  function paint(){ clamp(); items().forEach((li,i)=>li.classList.toggle('sel',i===idx)); }
+  ul.onmousemove = e=>{
+    const li=e.target.closest('li'); if(!li||li.classList.contains('disabled'))return;
+    const ni=items().indexOf(li);
+    if(ni>=0&&ni!==idx){ idx=ni; SFX.move(); paint(); }
+  };
+  ul.onclick = e=>{
+    if(transitioning) return;   /* 暗転中のクリックは無効（連打対策） */
+    const li=e.target.closest('li'); if(!li||li.classList.contains('disabled'))return;
+    idx=items().indexOf(li); paint(); SFX.ok(); onSelect(li);
+  };
+  ul._key = e=>{
+    clamp();
+    const its=items(); if(!its.length) return;
+    const k = e.key;
+    if(k==='ArrowDown'||k==='ArrowRight'){ idx=(idx+1)%its.length; SFX.move(); paint(); e.preventDefault(); }
+    if(k==='ArrowUp'||k==='ArrowLeft'){ idx=(idx-1+its.length)%its.length; SFX.move(); paint(); e.preventDefault(); }
+    if(k==='Enter'){ SFX.ok(); onSelect(its[idx]); e.preventDefault(); }
+  };
+  paint();
+  return { paint, reset:()=>{idx=0;paint();}, setIndex:(i)=>{idx=i;paint();}, current:()=>items()[idx] };
+}
+
+/* ---------- 画面切替 ----------
+   transitioning: 暗転中はキーもクリックも受け付けない（連打対策） ---------- */
+const fader = document.getElementById('fader');
+let currentScreen = 'scr-title';
+let transitioning = false;
+function goScreen(id){
+  if(transitioning) return;
+  transitioning = true;
+  SFX.stairs();
+  if(TYPE.el) clearTimeout(TYPE.el._timer);   /* 旧画面の文字送りタイマーを完全停止（レビュー反映） */
+  TYPE.active = false; TYPE.el = null;
+  msgAdvance = null;
+  fader.classList.add('on');
+  setTimeout(()=>{
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    currentScreen = id;
+    fader.classList.remove('on');
+    transitioning = false;
+    const enter = SCREEN_ENTER[id];
+    if(enter) enter();
+  },160);
+}
+
+/* ---------- セーブデータ ---------- */
+const SAVE_KEY = 'claude-code-quest-save-v1';
+let S = null;
+function newSave(name){
+  return {
+    name: name||'ゆうしゃ',
+    xp: 0, cleared: [], defeated: [], badges: [],
+    arenaDone: [], jissenChecks: {}, bossQuizOK: false,
+    tutDone: false, readQuests: [],
+    log: [], created: new Date().toLocaleString('ja-JP'),
+  };
+}
+/* 旧バージョン・破損データを既定形に補正してから使う（Codexレビュー反映） */
+function normalizeSave(s){
+  const d = newSave(s && s.name);
+  if(!s || typeof s !== 'object') return d;
+  const out = Object.assign({}, d, s);
+  ['cleared','defeated','badges','arenaDone','readQuests','log'].forEach(k=>{
+    if(!Array.isArray(out[k])) out[k] = [];
+  });
+  /* 配列の中身まで型検証する（レビュー反映：非数値混入でMath.maxがNaN化する等を防ぐ） */
+  out.cleared = out.cleared.filter(Number.isInteger);
+  out.readQuests = out.readQuests.filter(Number.isInteger);
+  out.defeated = out.defeated.filter(x=>typeof x==='string');
+  out.badges = out.badges.filter(x=>typeof x==='string');
+  out.arenaDone = out.arenaDone.filter(x=>typeof x==='string');
+  out.log = out.log.filter(e=>e && typeof e.t==='string' && typeof e.d==='string');
+  if(!out.jissenChecks || typeof out.jissenChecks !== 'object') out.jissenChecks = {};
+  const jc = {};
+  Object.entries(out.jissenChecks).forEach(([k,v])=>{ if(Array.isArray(v)) jc[k]=v.filter(Number.isInteger); });
+  out.jissenChecks = jc;
+  if(!Number.isFinite(out.xp) || out.xp < 0) out.xp = 0;
+  out.name = String(out.name || 'ゆうしゃ').slice(0,8);
+  out.tutDone = !!out.tutDone;
+  out.bossQuizOK = !!out.bossQuizOK;
+  return out;
+}
+/* 保存失敗は画面内で警告する（無通知で進捗が消えるのを防ぐ） */
+let saveBroken = false;
+function save(){
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify(S));
+    if(saveBroken){ saveBroken=false; document.getElementById('save-warn').style.display='none'; }
+  }catch(e){
+    saveBroken = true;
+    document.getElementById('save-warn').style.display='';
+  }
+}
+function load(){
+  try{
+    const j = localStorage.getItem(SAVE_KEY);
+    return j ? normalizeSave(JSON.parse(j)) : null;
+  }catch(e){ return null; }
+}
+function logAdd(text){
+  S.log.push({ d:new Date().toLocaleString('ja-JP'), t:text });
+  save();
+}
+
+/* ---------- レベル・称号 ---------- */
+const LEVELS = [
+  { lv:1, xp:0,    title:'見習い職人' },
+  { lv:2, xp:100,  title:'土台守り' },
+  { lv:3, xp:250,  title:'掟読み' },
+  { lv:4, xp:450,  title:'秘伝書使い' },
+  { lv:5, xp:700,  title:'からくり師' },
+  { lv:6, xp:1000, title:'門番' },
+  { lv:7, xp:1400, title:'使い魔遣い' },
+  { lv:8, xp:1800, title:'工房マイスター' },
+];
+function levelOf(xp){ let cur=LEVELS[0]; LEVELS.forEach(l=>{ if(xp>=l.xp) cur=l; }); return cur; }
+function nextLevel(xp){ for(const l of LEVELS){ if(xp<l.xp) return l; } return null; }
+/* innerHTMLに差し込む文字列のエスケープ（レビュー反映） */
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function gainXP(n, reason){
+  const before = levelOf(S.xp).lv;
+  S.xp += n;
+  const after = levelOf(S.xp);
+  logAdd(`＋${n}XP（${reason}）　累計${S.xp}`);
+  SFX.exp();
+  if(after.lv>before){
+    SFX.lvup();
+    const box=document.getElementById('levelup');
+    document.getElementById('levelup-text').innerHTML =
+      `${esc(S.name)} は レベル ${after.lv} に あがった！<br>しょうごう「${after.title}」を さずかった！`;
+    box.classList.add('show');
+    logAdd(`レベル${after.lv}にアップ！ 称号「${after.title}」`);
+    box.onclick=()=>{ box.classList.remove('show'); SFX.ok(); };
+  }
+  save();
+}
+
+/* ---------- 仮想コントローラ（スマホ・タッチ操作用） ----------
+   画面下の十字キー＋Aボタンが keydown イベントを合成発行する。
+   既存のキーボード操作モデルがそのままタッチで動く。 ---------- */
+document.querySelectorAll('#pad [data-k]').forEach(b=>{
+  b.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: b.dataset.k }));
+  });
+});
+</script>
+<script>
+/* ============================================================
+   データ1: クエスト（教材F章の要約＋クエストバトル各3問）
+   ※完全版の本文・操作手順は教材Markdown（正本）を参照
+   ============================================================ */
+const QUESTS = [
+{ id:1, name:'拡張の全体地図', sub:'5つの拡張ポイント', req:2,
+  mon:{ key:'okiban-golem', name:'何でも掟板ゴーレム', sprite:'goblin', pal:'brown',
+        desc:'「困ったら全部CLAUDE.mdに書けばいい」と思い込ませる石板の魔物。CLAUDE.mdは常時ロードでコンテキスト税がかかり続け、しかもadvisoryで実行保証がないという2点を隠している。' },
+  pages:[
+    { t:'結論', b:'Claude Codeの拡張機構の置き場所は【5つ】しかない。\nCLAUDE.md（常時の文脈）・Skill（オンデマンドの知識）・Hook（確実な自動化）・MCP（外部接続）・サブエージェント（隔離実行）。\n\n困りごとが起きたとき、この5つのどれに当てはまるかを考えれば迷わない。' },
+    { t:'ものがたりと学び', b:'工房の門をくぐると案内人が古い地図を広げた。「この工房には5つの拡張ポイントがある。どこに置くべきか知らずに始めると、あとで必ず迷う」\n\nClaude Codeユーザーの困りごとは4つに集約される。\n①毎回同じ指示を打っている\n②確実にやってほしいのにClaudeが忘れる\n③外部サービスと繋がらない\n④調査でメインの会話が汚れる' },
+    { t:'しくみの詳細', b:'CLAUDE.md：常時の文脈。①に効くが「必ず」は保証しない\nSkill：オンデマンドの知識。①のうち手順が複雑なもの\nHook：確実な自動化。②に効く\nMCP：外部接続。③に効く\nサブエージェント：隔離実行。④に効く\n\n【導入順トリガー】は「作るもの」を先に決めず「今どのきっかけに当たったか」から逆算するのが公式の推奨。' },
+    { t:'操作と失敗', b:'操作：プロジェクト直下と.claudeフォルダ、CLAUDE.mdの有無を【読み取り専用】で確認し、対応表に当てはめて「これはどの拡張ポイントか」を自分の言葉で言ってみる。\n\nよくある失敗：\n・何でもCLAUDE.mdに書こうとする→コンテキスト税とadvisoryの限界を見落とす\n・逆に何でもMCPだと思い込む→MCPは外部接続専用。プロジェクト内の知識や手順はSkillやCLAUDE.mdの領分' },
+  ],
+  quiz:[
+    { q:'「コミット前に必ずlintを走らせたい。Claudeの気分に左右されたくない」——この要件に最も適した拡張ポイントはどれ？',
+      c:['CLAUDE.mdに「lintを走らせる」と書く','Hookとして設定する','Skillとして切り出す'],
+      a:1, ex:'CLAUDE.mdやSkillへの記述は「お願い」であり保証がない。Hookはイベントで確実に発火する（deterministic）ため、判断の余地なく毎回起きてほしいことに向いている。' },
+    { q:'社内Slackへの投稿、DBへのクエリ、Figmaのデザイン取得——これらに共通して必要な拡張ポイントはどれ？',
+      c:['Skill','MCP','サブエージェント'],
+      a:1, ex:'外部サービスへの実際のツール接続はMCPの役割。Skillは「MCPの使い方を教える」側であり、接続そのものは提供しない。' },
+    { q:'「このプロジェクトではnpmではなくpnpmを使う」という規約を、Claudeに毎回知っておいてほしい。最も適した置き場所はどれ？',
+      c:['CLAUDE.md','Hook','MCP'],
+      a:0, ex:'常時ロードすべき「常にXする」系の短いルールはCLAUDE.mdの典型例。Skillにすると毎回は読み込まれず、タイミングによって漏れる可能性がある。' },
+  ]},
+{ id:2, name:'土台の点検', sub:'settings階層とpermissionの評価順', req:2,
+  mon:{ key:'uwagaki-yuurei', name:'上書き亡霊', sprite:'ghost', pal:'shadow',
+        desc:'「上の階層に書けば下を上書きできる」と思わせる亡霊。実際はpermissionルールだけは全階層からマージされ、denyは常に最優先で例外を持てない。' },
+  pages:[
+    { t:'結論', b:'settings階層は【Managed > コマンドライン引数 > Local > Project > User】の順で強いが、挙動はキーの種類で違う。\n通常キーは「上書き」、permissionルールだけは全階層から【マージ】される。\n\n評価順は常にdeny→ask→allowで、denyにはallowlist例外を作れない。' },
+    { t:'ものがたりと学び', b:'地図の次に案内人が連れて行ったのは、工房の地下——土台と錠前の間だった。「上の階層に書けば全部好きにできる、と思っている見習いが多い。だが錠前だけは別の仕組みで動いている」\n\nsettings階層は5段：\n①Managed（組織のOSレベルpolicy）\n②コマンドライン引数（一時上書き）\n③Local（settings.local.json、個人のみ）\n④Project（settings.json、チーム共有）\n⑤User（個人の全プロジェクト共通）' },
+    { t:'しくみの詳細', b:'通常の設定キーは上位スコープが下位を上書きする。だが【permissionルールだけは例外】で、全スコープから集約される。\n\nあるスコープでdenyされたツールは、他のどのスコープのallowでも解禁できない。\nルールの書式はTool(specifier)。裸のツール名はツールごと視界から消し、スコープ付きルールは該当呼び出しだけをブロックする。' },
+    { t:'操作と失敗', b:'操作：/permissionsで現在のルールと由来ファイルを確認し、/doctorで設定診断を実行する。練習用リポジトリのLocal settingsに安全なaskルールを1行追加してみる。\n\nよくある失敗：\n・denyルールに「一部だけ許可」の例外を書こうとする→denyはallowlist例外を持てない\n・本番の作業ディレクトリでbypassPermissionsを試す→隔離環境専用。練習は必ず練習用リポジトリで' },
+  ],
+  quiz:[
+    { q:'permissions.deny に Bash(aws *) があるとき、permissions.allow に Bash(aws s3 ls) を追加すると何が起きる？',
+      c:['aws s3 lsだけは例外的に実行できるようになる','aws s3 lsを含め、awsコマンドは依然としてすべて実行できない','deny自体が無効になり、すべてのawsコマンドが実行できるようになってしまう'],
+      a:1, ex:'denyはallowlist例外を持てない。広いdenyルールは、より狭いallowルールがあっても常に勝つ。' },
+    { q:'User settingsで Bash をallowしているが、Project settingsで同じ Bash をdenyしている。このプロジェクトでBashは実行できる？',
+      c:['実行できる。Project（下位）よりUser（上位に近い設定として書かれた側）が勝つから','実行できない。permissionルールは通常キーと違い全階層からマージされ、denyが最優先されるから','実行できるが、確認だけは毎回出る'],
+      a:1, ex:'通常の設定キーは上位スコープが下位を上書きするが、permissionルールだけは例外で全スコープからマージされる。一箇所でもdenyがあれば他のどのスコープのallowでも解禁できない。' },
+    { q:'組織全体で bypassPermissions モードの使用自体を禁止したい。適切な方法はどれ？',
+      c:['各メンバーのUser settingsで個別に禁止を依頼する','Project settingsに禁止設定を書き、リポジトリにコミットする','Managed settingsで disableBypassPermissionsMode を設定する'],
+      a:2, ex:'ユーザー・プロジェクト設定では上書きできない強制力が必要な場合はManaged settingsを使う。個人設定・プロジェクト設定は本人・チームの範囲でしか効かない。' },
+  ]},
+{ id:3, name:'常時の文脈CLAUDE.md', sub:'advisoryと200行問題', req:2,
+  mon:{ key:'kuchiyakusoku-oumu', name:'口約束オウム', sprite:'wisp', pal:'yellow',
+        desc:'「CLAUDE.mdに書いた＝必ず実行される」と口約束を繰り返すオウム。実際はシステムプロンプトではなくユーザーメッセージとして投入される文脈（advisory）にすぎない。' },
+  pages:[
+    { t:'結論', b:'CLAUDE.mdはシステムプロンプトではなく、毎セッション自動的に投入される【文脈（コンテキスト）】である。\n書いたことが必ず実行される保証はない（advisory）。\n\n特定のタイミングで必ず実行してほしいことは、CLAUDE.mdではなく【Hook】に書く——これが公式の指針である。' },
+    { t:'ものがたりと学び', b:'土台の点検を終え地上に戻ると、工房の壁に古い掟板が掲げられていた。見習いたちは毎朝それを読んでから作業を始める。だが案内人は言う。「これは法律ではない。先輩からの申し送りだ。守るかどうかは、結局その日の判断に委ねられている」\n\nCLAUDE.mdは配置場所ごとに共有範囲が違う：\nManaged policy（組織全体）／User instructions（本人のみ）／Project instructions（チーム共有）／Local instructions（本人のみ、そのプロジェクト）' },
+    { t:'しくみの詳細', b:'CLAUDE.mdはシステムプロンプトの後に続く【ユーザーメッセージ】として投入される。よって「必ず守られる」保証はない。\n\n200行を超えると文脈消費が増え、遵守率が下がる傾向がある（200行問題）。公式の対処は「既に正しく動いている指示は消すかHookに変換する」こと。\n\n@pathインポートは最大4ホップ。CLAUDE.local.mdは人間が書く個人用指示でgitignore対象、auto memoryはClaudeが書く学びのメモ。' },
+    { t:'操作と失敗', b:'操作：CLAUDE.mdの存在階層を確認し、wc -lで行数（200行問題）を数え、@importの有無を目視で確認する。練習用リポジトリに個人用のCLAUDE.local.mdを作り、.gitignore対象になっているか確認する。\n\nよくある失敗：\n・「CLAUDE.mdに書いたのに毎回はやってくれない」と混乱する→確実に実行させたいならHookに書く\n・個人的なメモをProject CLAUDE.mdに書いてコミットしてしまう→チーム全員に共有されてしまう' },
+  ],
+  quiz:[
+    { q:'「.envファイルは絶対に編集させたくない」。CLAUDE.mdに「.envを編集しないでください」と書くだけで十分？',
+      c:['十分。CLAUDE.mdに書けば必ずその通りに守られ、編集は確実にブロックされる','不十分。CLAUDE.mdは文脈（advisory）であり強制力がないため、permissionのdenyルールかHookによるブロックが必要','不十分。CLAUDE.local.mdに書き直せば、記述内容の強制力が生まれて確実に守られる'],
+      a:1, ex:'「Never do X」はCLAUDE.mdでは強制力を持たない（お願いに過ぎない）。確実に禁止するにはpermissions.denyかHookによるブロックが必要。' },
+    { q:'このリポジトリでだけ使う個人的なメモ（チームには共有したくない）を残したい。最も適した置き場所はどれ？',
+      c:['Project instructions（./CLAUDE.md）','CLAUDE.local.md','.claude/rules/（pathsなし）'],
+      a:1, ex:'CLAUDE.local.mdはgitignore対象で個人専用。プロジェクトのCLAUDE.mdに書くとチーム全員に共有されてしまう。' },
+    { q:'CLAUDE.mdが300行に膨れ上がり、大事なルールがだんだん守られなくなってきた。公式が推奨する対処はどれ？',
+      c:['さらに詳しく書き足して、念を押す','既に正しく動いている指示は消すか、Hookに変換する','何もしなくてよい。行数は遵守率に影響しない'],
+      a:1, ex:'200行を超えると重要なルールが埋もれてClaudeが半分無視するようになる傾向がある。公式の対処は、定着した指示を削るか、確実性が必要な指示はHookへ移すこと。' },
+  ]},
+{ id:4, name:'秘伝書 Skills I', sub:'SKILL.mdとdescription設計', req:2,
+  mon:{ key:'honbun-slime', name:'本文べったりスライム', sprite:'slime', pal:'green',
+        desc:'「本文を詳しく書けば発火する」と思わせるスライム。実際は発火判定の材料はfrontmatterのdescriptionだけで、本文の分量は一切関与しない。' },
+  pages:[
+    { t:'結論', b:'Skill（Agent Skills、秘伝書）は、SKILL.mdというMarkdownファイル1枚を核に、Claudeが必要なタスクのときだけ読み込む指示・知識のフォルダである。\n\nfrontmatterにはnameとdescriptionが必須で、Claudeが「このSkillを今使うべきか」を判定する材料は、ほぼ【description】だけである。' },
+    { t:'ものがたりと学び', b:'工房の奥に、鍵のかかった書庫がある。棚には背表紙だけが並び、中身は開くまで読めない。工房主のあなたは、この秘伝書の棚の使い方をクロードから教わることになった。\n\nスキルは3段階でコンテキストに取り込まれる（progressive disclosure）：\n①Discovery（起動時、nameとdescriptionのみ）\n②Activation（発火時、SKILL.md本文全体）\n③Resource loading（必要な時だけreferences/scripts/assets）' },
+    { t:'しくみの詳細', b:'nameは最大64字・小文字数字ハイフンのみ・予約語（anthropic/claude）禁止。descriptionは最大1024字・改行なし推奨。\n\n配置スコープ：User scope（~/.claude/skills/、個人全プロジェクト）／Project scope（.claude/skills/、チーム共有）／Managed（組織全体）。\n\n起動方法は2種：/name での明示呼び出しと、Claudeがdescriptionを見て自動発火する方法。どちらも判定材料は同じくdescription。' },
+    { t:'操作と失敗', b:'操作：.claude/skills/（スキル名）/SKILL.mdを作成し、descriptionに「何ができるか」「いつ使うか」を1行で具体的に書く。保存後はセッションを終了し、新セッションで自動発火するか確認する。\n\nよくある失敗：\n・本文だけ丁寧に書いてdescriptionを後回しにする→発火判定はdescriptionのみ\n・スコープを考えずとりあえずUser scopeに置く→チーム共有したい手順はProject scopeへ' },
+  ],
+  quiz:[
+    { q:'アプリケーションのビルドコマンドと、PRレビュー用のチェックリストを管理したい。どちらをCLAUDE.mdに、どちらをSkillにするべきか？',
+      c:['ビルドコマンド→Skill、PRレビューチェックリスト→CLAUDE.md','ビルドコマンド→CLAUDE.md、PRレビューチェックリスト→Skill','両方CLAUDE.md'],
+      a:1, ex:'ビルドコマンドはほぼ毎セッション必要になるためCLAUDE.md向き。PRレビューチェックリストは特定タスクでのみ必要なためSkill向き。' },
+    { q:'次の2つのdescriptionのうち、Claude Codeで自動発火する確率が高いのはどちらか？\nA「Helps with documents」\nB「Extract text and tables from PDF files, fill forms, merge documents, split, rotate, add watermarks, and perform OCR. Use when working with PDFs or when the user mentions PDFs, forms, or document extraction.」',
+      c:['A','B','どちらも同じ'],
+      a:1, ex:'descriptionはClaudeがスキルを発火させるか判定する唯一の手がかり。Bは具体的なキーワードとトリガー条件を含み発火率が高い。' },
+    { q:'Skillの3段階読み込み（progressive disclosure）を正しい順序で選べ。',
+      c:['リソースファイル→SKILL.md→メタデータ','メタデータ→SKILL.md→リソースファイル','SKILL.md→メタデータ→リソースファイル'],
+      a:1, ex:'Discovery（メタデータ）→Activation（SKILL.md本文）→Resource loading（補助ファイル）の順。この順序があるからスキルを多数持っていても起動時のコンテキスト消費は最小限で済む。' },
+  ]},
+{ id:5, name:'秘伝書 Skills II', sub:'発火しないときの診断', req:2,
+  mon:{ key:'sokuseki-golem', name:'即席ゴーレム', sprite:'mimic', pal:'brown',
+        desc:'「セッション中に足したSkillはすぐ使える」と焦らせる急ごしらえの土人形。実際はスキルはセッション起動時にしかdiscoverされず、再起動するまで反映されない。' },
+  pages:[
+    { t:'結論', b:'Skillが発火しない原因の大半は、frontmatterの【パースエラー】（description改行、予約語、既知バグ）か、【セッションを再起動していない】ことのどちらかである。\n\n/doctorで症状を切り分け、原因ごとに対処すればほぼ確実に解決する。' },
+    { t:'ものがたりと学び', b:'新しく作った秘伝書が、棚に並んでいるはずなのに一向に出てこない。工房主は首をかしげる。「昨日足したばかりなのに、なぜ？」クロードは静かに答えた。「棚の点検には手順があります」\n\nスキルはセッション起動時にdiscover（検出）・load（読込）される。実行中のセッションに追加・編集しても、そのセッションには一切反映されない。' },
+    { t:'しくみの詳細', b:'原因は主に4つ：\n①description改行→パーサーがfrontmatterを読めず検出不可\n②セッション未再起動→追加・編集が反映されない\n③予約語やXMLタグ→frontmatter検証失敗\n④pathsフィールドの既知バグ→スキル全体が検出不可\n\n対策はYAML block scalar（description: ）で改行を安全にする、pathsを使わずdescriptionで示唆する、など。' },
+    { t:'操作と失敗', b:'操作：/doctorでスキルの検出状況を確認し、descriptionをわざと改行させて壊し、新規セッションで検出不可になることを確認する。block scalar形式に書き直し、再度検出されるか確認する。\n\nよくある失敗：\n・編集直後、同じセッションで「動かない」と焦る→まず再起動を疑う\n・pathsフィールドで限定しようとする→既知バグで検出不可になる' },
+  ],
+  quiz:[
+    { q:'ログファイルを分析するスキルを作った。分析中に誤ってユーザーのファイルを削除・編集されるのを防ぎたい。どのallowed-tools設定が適切か？',
+      c:['allowed-tools: [Read, Execute, Write]','allowed-tools: [Read, Grep, Glob]','allowed-toolsを指定しない'],
+      a:1, ex:'ログ分析は読み取り専用タスク。[Read, Grep, Glob]は読込・検索のみを許可し削除・編集は不可能にする。' },
+    { q:'次のfrontmatterのうち、パースに失敗する可能性がある（またはスキルが検出不可になる）ものはどれか。\n①description改行の恐れがある長文（block scalar未使用）\n②nameに予約語「anthropic」を含む\n③YAML block scalarで正しく複数行化されている',
+      c:['①と②','②と③','①のみ'],
+      a:0, ex:'①はフォーマッターによる自動改行でパースエラーを起こす可能性が高い。②はnameに予約語「anthropic」を含み検出不可になる。③はblock scalarを正しく使っているため問題ない。' },
+    { q:'現在のClaude Codeセッションを実行中に、新しいスキルをプロジェクトの.claude/skills/my-skill/SKILL.mdに追加した。そのセッション内で新しいスキルを使えるか？',
+      c:['はい、すぐに使える','いいえ、セッションを再開した後に使える','/refreshコマンドで即座に読み込める'],
+      a:1, ex:'スキルはセッション起動時にdiscover・loadされる。実行中に追加されたスキルは現在のセッションでは検出されない。' },
+  ]},
+{ id:6, name:'自動仕掛け Hooks I', sub:'deterministicな自動仕掛け', req:2,
+  mon:{ key:'onegai-sprite', name:'お願いスプライト', sprite:'demon', pal:'reddemon',
+        desc:'「Hookもお願いの一種」と思わせる小さな精霊。実際はハーネスが機械的に発火させるdeterministicな仕組みで、モデルの判断を経由しない。' },
+  pages:[
+    { t:'結論', b:'Hook（自動仕掛け）は、CLAUDE.mdやSkillのような「モデルへのお願い」とは根本的に別物で、ハーネスが特定のイベントで機械的に必ず実行する【deterministic（決定論的）】な仕組みである。\n\nモデルが忘れる・気分で省略する、ということが起きない。' },
+    { t:'ものがたりと学び', b:'工房の床に、見慣れない魔法陣が刻まれている。クロードが説明する。「これは自動仕掛けです。誰かがこの上を通れば、私の判断とは関係なく、必ず作動します」工房主は聞き返した。「お願いするのと、何が違うの？」\n\nCLAUDE.mdやSkillに書いた指示はClaudeが状況に応じて実行するか判断する。Hookはライフサイクル内の特定ポイントでハーネスが自動的に実行し、モデルは介在しない。' },
+    { t:'しくみの詳細', b:'主要イベント：PreToolUse（ツール実行直前）／PostToolUse（実行成功後）／UserPromptSubmit（入力送信時）／SessionStart（セッション開始）／Stop（応答完了時）／Notification（入力待機時）。\n\nsettings.jsonは「イベント→matcher→hooks配列」の3段ネスト。matcherは【大文字小文字を区別】し、英数字なら完全一致か｜区切り、それ以外は正規表現として評価される。' },
+    { t:'操作と失敗', b:'操作：.claude/settings.jsonにPostToolUseフックを追加し、編集ファイルパスと日時をログへ追記するだけの無害な仕掛けを試す。/hooksで登録を確認し、動作したら片付ける。\n\nよくある失敗：\n・matcherの大文字小文字を間違える→bashではなくBash。一致しないと発火しない\n・「Hookも結局はお願い」と思い重要な自動化をSkillやCLAUDE.mdだけで済ませる' },
+  ],
+  quiz:[
+    { q:'ユーザー入力に対し、Bashコマンド実行の直前に「このコマンド、本当に実行する？」と確認したい。どのイベントが適切か？',
+      c:['UserPromptSubmitフック','PreToolUseフック','Stopフック'],
+      a:1, ex:'UserPromptSubmitは入力処理前でまだ何を実行するか決まっていない。PreToolUseはツール実行直前で、実行コマンドが確定した後に判定できる。' },
+    { q:'全プロジェクト共通で「Pythonファイル編集時は自動でBlackによりフォーマットする」を実装したい。最も適切なのはどれか？',
+      c:['~/.claude/settings.jsonにPostToolUseフックを追加する','CLAUDE.mdに「ファイル編集後はBlackで整形する」と指示を書く','Skillを定義してformat-pythonコマンドで呼び出せるようにする'],
+      a:0, ex:'確定的な実行が必要なのでモデル任せのCLAUDE.mdやSkillではなくHookが適する。全プロジェクト対象なのでユーザー全体スコープのsettings.jsonに置く。' },
+    { q:'Git commit直前に「コミットメッセージにissue番号が含まれているか」を検証したい。Claudeがgit commitを実行しようとしているタイミングで検証を強制したい。適切な選択はどれか？',
+      c:['PostToolUse＋"matcher": "Bash"','PreToolUse＋"matcher": "Bash"','Stopフック（Claude応答終了時）'],
+      a:1, ex:'実行前の検証が必要なのでPreToolUse（実行ブロック可能）が適する。PostToolUseでは既にコミットが完了しており取り消せない。' },
+  ]},
+{ id:7, name:'自動仕掛け Hooks II', sub:'exit codeの排他性とハンドラー型', req:2,
+  mon:{ key:'nitoryu-wisp', name:'二刀流ウィスプ', sprite:'wisp', pal:'blue',
+        desc:'「exit 2でブロックしつつ同時にJSON出力で詳細な決定も伝えられる」と思わせる二刀流の妖霊。実際はexit codeが0のときだけJSONが処理され、2のときはstderrのみが処理される排他ルールを隠している。' },
+  pages:[
+    { t:'結論', b:'Hookの実行結果は、exit codeで扱いが完全に分かれる。\n【exit 0】のときだけstdoutのJSONが処理され、【exit 2】のときはstderrのみが処理されてブロックが発生する。\n\nexit 0とexit 2は排他的で、両方を同時に使うことはできない。ブロックしたいならstderrに書いてexit 2、構造化した決定を返したいならexit 0でJSONを出力する。' },
+    { t:'ものがたりと学び', b:'工房主は「危険な操作は止めて、かつ詳しい報告も出したい」と欲張った設定を書いたが、仕掛けは動かなかった。合図は一度に一種類しか出せない。\n\n二刀流ウィスプの正体は【exit codeの排他性】への誤解。exit 2でブロックしつつ同時にJSONで詳細な決定も伝えられる、と思い込ませてくる。\n\n実際にはexit codeが0のときだけJSONが処理され、2のときはJSONは無視されstderrだけが処理される。' },
+    { t:'しくみの詳細', b:'返却方法は4パターン。\nexit 0：通常フロー続行（JSON処理あり）\nexit 0＋JSON：構造化された決定（パーミッション制御等）\nexit 2＋stderr：ブロッキングエラー（JSON処理されない）\n他のexit code：非ブロッキングエラー\n\n【if】フィールドはmatcherをさらに絞り込む補助で、matcherの代替にはならない。ifだけを設定しmatcherを省略すると、フック自体が発火しない。\n\nハンドラー型は【command/http/mcp_tool/prompt/agent】の5種。複数フック並列実行時は最も制限的な判定（deny＞defer＞ask＞allow）が優先される。' },
+    { t:'操作と失敗', b:'操作：.claude/hooks/にrm -rfを検出してexit 2でブロックするスクリプトを作り、chmod +xで実行権限を付与する。settings.jsonにmatcher:"Bash"＋if:"Bash(rm *)"の設定を追加し、/hooksで登録内容を確認する。\n\nよくある失敗：\n・ブロックしたいのにexit 2とJSON出力を両方書いてしまう→exit 2の場合JSONは無視される\n・ifだけ設定してmatcherを省略する→フックが一度も発火しない' },
+  ],
+  quiz:[
+    { q:'あるPreToolUseフックスクリプトが、危険コマンドを検出したので echo \'{"decision": "block", "reason": "dangerous"}\' を出力し、exit 2で終了した。この場合、Claude Codeはどう扱うか？',
+      c:['JSONのdecision通りにブロックし、reasonをClaudeに伝える','exit 2なのでJSONは無視され、stderrの内容だけが処理される（この例ではstderrに何も書いていないため理由が伝わらない可能性が高い）','exit codeよりJSONの内容が常に優先されるため、正常にブロック理由が伝わる仕様である'],
+      a:1, ex:'exit codeが2の場合、stdoutのJSONは無視されstderrのみが処理される。ブロック理由を伝えるにはstderrに書く必要がある。' },
+    { q:'同一のPreToolUse・同一matcherに2つのフックが定義されている。1つ目は通過（exit 0）、2つ目はブロック（exit 2）を返した場合、Claudeがrm -rf /tmpを実行しようとした時の結果は？',
+      c:['1つ目は実行されずスキップされ、2つ目だけ実行される','両方並列実行され、1つ目は成功、2つ目がブロック→ブロック結果が優先される','1つ目の副作用（ログ書き込み等）がアンドゥされる'],
+      a:1, ex:'複数フックは並列実行され、permission decisionは最も制限的な判定（deny）が優先される。ただし先に完了した副作用は取り消されない。' },
+    { q:'次の2つのシナリオに、それぞれ適切なハンドラー型はどれか。\nシナリオA: 「このコマンドは危険か？」を単発で判定したい\nシナリオB: 「テストが全てpassしているか」を実際にテストを実行して検証したい',
+      c:['シナリオA: prompt hook／シナリオB: prompt hook','シナリオA: prompt hook／シナリオB: agent hook','シナリオA: agent hook／シナリオB: prompt hook'],
+      a:1, ex:'シナリオAは単発のコマンド判定で足りるためprompt hookが適する。シナリオBは実際にテストを実行し検証するためagent hookが適する。' },
+  ]},
+{ id:8, name:'召喚の門 MCP I', sub:'host/client/serverとtools/resources/prompts', req:2,
+  mon:{ key:'kondou-fairy', name:'混同フェアリー', sprite:'ghost', pal:'pale',
+        desc:'MCPとSkillを「どちらもClaudeにできることを増やす同じもの」と思わせる妖精。実際はSkillが知識の拡張、MCPが外部システムへの接続という別の役割を持つ。' },
+  pages:[
+    { t:'結論', b:'MCP（Model Context Protocol）は【AIアプリケーションを外部システムに接続するオープンソース標準規格】である。\n\nClaude Code内ではhost・client・serverの3層で動き、serverはtools（実行可能なアクション）・resources（読み取り専用データ）・prompts（再利用可能なテンプレート）の3種を提供する。' },
+    { t:'ものがたりと学び', b:'CLAUDE.md・Skill・Hookを使いこなせるようになった工房主の前に、外の世界と繋がるための【召喚の門】が現れる。\n\n混同フェアリーの正体は【接続の拡張(MCP)と知識の拡張(Skill)の混同】。「社内の規約に沿ってレビューする手順を教えたい」ならSkillの仕事、「Notionのページを実際に読み書きしたい」ならMCPの仕事。「やり方を教える」か「外部と繋ぐ」かで見分ける。' },
+    { t:'しくみの詳細', b:'MCPが解決するのは【N×M問題】。AIアプリN個と外部サービスM個を個別に繋ぐ代わりに、共通プロトコル1本で済ませる。\n\nHostがserverごとにClientを1つ生成し、client・serverは1対1接続。serverはtools/resources/promptsを提供する。\n\ntransportはローカルなら【stdio】、リモートなら【Streamable HTTP】が基本。MCPツールは"mcp__server__tool"の命名規則でpermissionルールにも使う。' },
+    { t:'操作と失敗', b:'操作：claude mcp listで接続済みサーバーの名前・transport・接続状態を確認する（読み取りのみ）。詳細はclaude mcp get（サーバー名）で見る。\n\n【危険境界】MCPサーバーの追加は任意プログラムの実行許可と同義になり得る。中身を確認していないserverや信頼できない配布元のserverは絶対に追加しない。\n\nよくある失敗：「MCPを入れればAIが賢くなる」と思い込む→MCPは接続を増やすだけで判断力は上げない。' },
+  ],
+  quiz:[
+    { q:'「Claudeに社内のコーディング規約に沿ったレビュー手順を教えたい。MCPサーバーを作るべきか？」',
+      c:['はい。手順もMCP serverとして実装するのが正しい','いいえ。Skill（またはCLAUDE.md）が適切','どちらでも同じ結果になる'],
+      a:1, ex:'MCPは外部システムへの接続のためのプロトコルで、知識・手順の付与はSkillの役割。両者の混同は典型的な誤解である。' },
+    { q:'MCPサーバーが提供する3種の提供物のうち、「読み取り専用のデータ」はどれ？',
+      c:['tools','resources','prompts'],
+      a:1, ex:'tools=実行可能なアクション、resources=読み取り専用データ、prompts=再利用可能なテンプレートという役割分担である。' },
+    { q:'ローカルでnpx起動するサーバーと、https://mcp.notion.com/mcpのようなサーバー。transportはそれぞれ何が基本？',
+      c:['どちらもstdio','どちらもStreamable HTTP','前者はstdio、後者はStreamable HTTP'],
+      a:2, ex:'ローカルプロセスはstdio、リモートサービスはStreamable HTTPという使い分けが基本になる。' },
+  ]},
+{ id:9, name:'召喚の門 MCP II', sub:'scopeの優先順位と信頼境界', req:2,
+  mon:{ key:'douitsuka-golem', name:'同一化ゴーレム', sprite:'goblin', pal:'purple',
+        desc:'「scopeはどれでも同じ」と思わせるlocal・project・userの3つの顔を持つ土人形。実際は保存先・共有範囲・優先順位（local＞project＞user）がscopeごとに異なる。' },
+  pages:[
+    { t:'結論', b:'MCPサーバーを追加するときの最重要判断は【scope（適用範囲）】と【信頼できる提供元かどうか】の2つ。\n\nscopeはlocal（自分・このプロジェクトのみ）・project（チーム共有、.mcp.json）・user（自分・全プロジェクト）の3種で、優先順位はlocal＞project＞user。認証が必要なリモートserverは/mcpでの認証が必要になる。' },
+    { t:'ものがたりと学び', b:'門の構造を知った工房主は、いよいよ召喚を試みる。だが門番は言う。「どこに刻むかを間違えると、使い魔は自分専用にしかならないし、逆に部外者にまで見えることもある」\n\n同一化ゴーレムの正体は【scopeの保存先・共有範囲・優先順位の違いへの無理解】。「チームで共有したいのにlocalに入れた」という失敗は、scopeを刻む場所を意識していないことから起きる。' },
+    { t:'しくみの詳細', b:'claude mcp add --scope projectのように--scopeで適用範囲を指定できる。localは~/.claude.json（自分のみ）、projectは.mcp.json（チーム共有、Gitにコミット可）、userは~/.claude.json（自分・全プロジェクト）に保存される。\n\n同名serverが複数scopeにある場合は【local＞project＞user】の優先順位で最優先のものだけが接続される。\n\n.mcp.json（project scope）由来のserverは初回接続時にユーザー承認が必須。認証情報は.mcp.jsonに直書きせず【環境変数展開】を使う。' },
+    { t:'操作と失敗', b:'操作：claude mcp listで現状確認→claude mcp add playwright -- npx -y @playwright/mcp@latestでlocal scope追加→claude mcp getで確認→claude mcp remove playwrightで削除、という安全な往復練習をする。\n\n【危険境界】claude mcp addは「このコマンドを自動実行してよい」という許可を意味する。提供元は必ず事前に確認する。\n\nよくある失敗：チーム共有のつもりでlocal scopeに追加してしまう→他のメンバーには反映されない。' },
+  ],
+  quiz:[
+    { q:'「チーム全員が同じMCPサーバーを使えるようにしたい。どのscopeで追加する？」',
+      c:['local','project','user'],
+      a:1, ex:'localとuserは~/.claude.json保存で本人のみ、projectだけが.mcp.jsonでチーム共有できる。' },
+    { q:'同じ名前のサーバーがlocalとprojectの両方に定義されている。どちらが使われる？',
+      c:['local','project','両方が同時に有効になる'],
+      a:0, ex:'優先順位はlocal＞project＞userで、最優先scopeの定義のみが接続され他は無視される。' },
+    { q:'リモートMCPサーバーを追加したのに、ツールを呼ぶと401エラーが出る。次にやることは？',
+      c:['serverをremoveしてもう一度addし直す','/mcpを実行してserverを選びAuthenticateする','サーバーが壊れているので提供元に連絡する'],
+      a:1, ex:'401/403は認証未完了のサインであり、/mcpからのOAuthフローで解決する。' },
+  ]},
+{ id:10, name:'使い魔 サブエージェント I', sub:'独立コンテキストと委譲メッセージ', req:2,
+  mon:{ key:'bunshin-shadow', name:'分身騙りシャドウ', sprite:'mimic', pal:'lich',
+        desc:'「使い魔は会話を全部知っている」と思わせ、あなたの姿を借りて話しかけてくる影。実際はサブエージェントは独立したコンテキストで動き、会話履歴は一切引き継がれない（forkを除く）。' },
+  pages:[
+    { t:'結論', b:'サブエージェント（使い魔）は【独立したコンテキストウィンドウで動く分身】であり、会話履歴は一切引き継がれない。\n\nメインが要約した「委譲メッセージ」だけを渡され、作業の詳細はメインに流れ込まず、最終的な結果（要約）だけが返ってくる。これが「コンテキスト汚染」を防ぐ仕組みである。' },
+    { t:'ものがたりと学び', b:'召喚の門を使えるようになった工房主に、古参が新しい仲間【使い魔】を紹介する。あなたの代わりに調べ物をこなし、必要な結果だけを持ち帰る分身だ。ただし使い魔はあなたの記憶を共有しない。\n\n分身騙りシャドウの正体は【コンテキスト分離の仕組みへの無理解】。通常のサブエージェントは会話履歴・既に使ったSkill・既に読んだファイルを一切見ない。唯一の例外がforkで、会話全体を丸ごと継承する。' },
+    { t:'しくみの詳細', b:'主要な組み込みサブエージェントは3種。\n【Explore】読み取り専用、コードベース探索\n【Plan】読み取り専用、Plan modeでの調査\n【general-purpose】全ツール、探索と変更の両方が必要な複雑タスク\n\nExplore/Planは1回限り（resume不可）で、かつ【CLAUDE.mdとgit statusを読み込まない】。他の全サブエージェントはこの2つを読み込む。ルールを守らせたいなら委譲メッセージに明示する必要がある。' },
+    { t:'操作と失敗', b:'操作：「Exploreサブエージェントを使って、プロジェクトのディレクトリ構成と設定ファイルを調べて報告して」と依頼する（読み取り専用）。返ってきた報告が要約であり、途中のログは表示されないことを確認する。\n\nよくある失敗：\n・「さっき話したあの件、続きをやって」と丸投げする→会話履歴は伝わらない\n・1行の修正までサブエージェントに委譲する→オーバーヘッドが上回る' },
+  ],
+  quiz:[
+    { q:'サブエージェントに「vendor/ディレクトリは無視して」というルールを守らせたい。CLAUDE.mdに書けば十分か？',
+      c:['十分。CLAUDE.mdは全てのサブエージェントが共通して読み込む前提の仕組みである','不十分。Explore/PlanはCLAUDE.mdを読み込まないため、委譲プロンプト自体に明示する必要がある','不十分。サブエージェントはCLAUDE.mdを一切読まない'],
+      a:1, ex:'Explore/PlanはCLAUDE.mdを読み込まない仕様のため、ルールは委譲メッセージ自体に明示する必要がある。' },
+    { q:'大きなコードベースで「認証・DB・APIの3モジュールをそれぞれ調べて」と頼みたい。サブエージェントに委譲すべきか？',
+      c:['委譲すべき。3つの調査は互いに独立しており、並列サブエージェントの典型的な適用例','委譲すべきでない。1人で順番に調べたほうが正確','どちらでも結果は変わらない'],
+      a:0, ex:'独立した調査対象が複数あるケースは並列サブエージェントの典型的な適用例で、メインの文脈を汚さずに済む。' },
+    { q:'「ログイン画面のタイポを直して」という1行変更のタスク。サブエージェントに委譲すべきか？',
+      c:['委譲すべき。どんな小さな変更もサブエージェントに任せるのが安全','委譲すべきでない。差分を一文で説明できる小規模タスクでは過剰','Exploreにだけは必ず委譲すべき'],
+      a:1, ex:'差分を一文で説明できるほど小さいタスクでは、委譲メッセージ作成や結果要約のオーバーヘッドが見合わない。' },
+  ]},
+{ id:11, name:'使い魔 サブエージェント II', sub:'frontmatter設計と並列化のコスト', req:2,
+  mon:{ key:'bousou-stampede', name:'暴走スタンピード', sprite:'demon', pal:'bluebeast',
+        desc:'「並列にすれば何でも速く安くなる」と叫びながら分裂する暴走の群れ。実際は並列化はレイテンシ短縮に効くだけで、トークンコストは通常比約4倍・マルチエージェント構成では約15倍に増える。' },
+  pages:[
+    { t:'結論', b:'カスタムサブエージェントは【.claude/agents/*.md】にfrontmatter（nameとdescriptionが必須）＋Markdown本文で定義する。\n\ndescriptionの書き方が自動委譲の可否を決める最重要フィールド。並列実行やネスト（深さ上限5）は便利だが、サブエージェント使用は通常のチャットの約【4倍】、マルチエージェント構成では約【15倍】のトークンを消費する。' },
+    { t:'ものがたりと学び', b:'使い魔の基本を覚えた工房主は自分専用の使い魔を作りたくなる。師匠は言う。「使い魔は増やせば増やすほど頼もしい……と思うだろう。だが契約書（frontmatter）の書き方一つで、使い魔は暴走もするしコストも跳ね上がる」\n\n暴走スタンピードの正体は【並列化の効果とコストを混同した誤解】。並列化はレイテンシ短縮には効くが、トークンコストは増える。コーディングのような密結合タスクは真に並列化できる部分が少なく恩恵が薄い。' },
+    { t:'しくみの詳細', b:'frontmatterの必須フィールドはnameとdescriptionのみ。tools（許可ツール）・disallowedTools・model・permissionMode等は任意。\n\n保存場所の優先度：Managed settings＞--agents CLIフラグ＞.claude/agents/（プロジェクト）＞~/.claude/agents/（ユーザー）＞プラグイン。\n\nネストはv2.1.172以降サポートされ【深さ上限5段】固定。v2.1.198以降サブエージェントはデフォルトで【バックグラウンド実行】になった。' },
+    { t:'操作と失敗', b:'操作：.claude/agents/にtools: Read, Grep, Glob, Bashに限定した読み取り専用サブエージェントを定義し、明示的に委譲を依頼して呼ばれるか確認する。新規作成直後は再起動が必要な場合がある。\n\nよくある失敗：\n・とにかく並列にすれば速く安くなると思い込む→コストは増える方向に働く\n・descriptionを「〜する係」程度で済ませ、委譲されないと悩む→使いどころの条件を具体的に書く' },
+  ],
+  quiz:[
+    { q:'実装が終わったコードを、実装したエージェント自身にレビューさせるのと、フレッシュなサブエージェントにレビューさせるのとでは、どちらが客観性が高いか？',
+      c:['実装したエージェント自身。経緯を知っているぶん精度が高い','フレッシュなサブエージェント。実装の理由付けを共有していないため結果だけで評価できる','どちらも同じ'],
+      a:1, ex:'フレッシュなサブエージェントは実装の理由付けを共有していないため、結果だけを見て客観的に評価できる。' },
+    { q:'コーディング作業（機能実装）を5つのサブエージェントに完全並列で分担させれば、5倍速くなるか？',
+      c:['なる。並列化した分だけ速くなる','ならない。コーディングは真に並列化できる部分が少なく、コストはむしろ増大する','サブエージェントの数を増やすほど必ず速くなる'],
+      a:1, ex:'コーディングは真に並列化できる部分が少なく、トークンコストはむしろ通常比約15倍に増える。' },
+    { q:'サブエージェントAがサブエージェントBを生成し、Bがさらに別のサブエージェントを……と繰り返すことは可能か？',
+      c:['不可能。サブエージェントは他のサブエージェントを生成できない','可能だが、深さ上限5段まで','無制限に可能'],
+      a:1, ex:'v2.1.172以降ネスト可能だが深さ上限は5段固定で、上限に達するとAgentツールが渡されない。' },
+  ]},
+{ id:12, name:'五つの秘伝の使い分け', sub:'判断3軸による五つの秘伝の使い分け', req:2,
+  mon:{ key:'zenbunose-golem', name:'全部乗せゴーレム', sprite:'dragon', pal:'bossdrag', boss:true,
+        desc:'「新機能は多いほど良い」と思わせ、目についた秘伝を片っ端から装備していく最終形態のゴーレム。実際は不要な拡張がコンテキスト税と攻撃面を同時に増やすだけである。' },
+  pages:[
+    { t:'結論', b:'五つの秘伝（CLAUDE.md／Skill／Hook／MCP／サブエージェント）に【優劣はない】。判断は3つの軸で決まる。\n①確実に実行されるべきか（Hook）、モデルの判断に委ねてよいか（CLAUDE.md/Skill）\n②常時ロードすべきか（CLAUDE.md）、必要な時だけでよいか（Skill）\n③知識の追加か、外部接続（MCP）か、文脈分離（サブエージェント）か\nこの3軸を当てはめれば、大抵の要件は迷わず割り振れる。' },
+    { t:'ものがたりと学び', b:'十一のクエストを終え、工房主の手元には五つの秘伝書と土台（settings階層）が揃った。工房の奥にはまだ名前のつかない依頼が積まれている。「これは、どの秘伝で解けばいい？」\n\n全部乗せゴーレムの正体は「新機能は多いほど良い」という思い込み。目についた秘伝を片っ端から装備するが、不要な拡張は【コンテキスト税】（常時ロードで文脈を消費）と【攻撃面】（任意コード実行やprompt injectionの経路が増える）を同時に増やす。倒し方は「困っていないのに先回りで拡張を積まない」こと。' },
+    { t:'しくみの詳細', b:'導入順トリガー表：\n規約やコマンドを2回間違えた→CLAUDE.md\n同じプロンプトを繰り返す→Skill\n同じ手順書を3回目も貼り付けている→Skillとして切り出す\n同じデータを何度もコピーしている→MCPサーバーとして接続\n会話を参照しない大量出力で埋まる→サブエージェント\n確認なしで毎回同じことが起きてほしい→Hook\n2つ目のリポジトリで同じセットアップが必要→Plugin化\n\nPluginはSkill・サブエージェント定義・Hook・MCP設定をまとめる配布単位で、【ユーザー権限で任意コードを実行できる】高い信頼を要する部品である。' },
+    { t:'操作と失敗', b:'操作：/permissionsで許可ルールを確認、/doctorで健康診断、claude mcp listで接続済みサーバー確認、ls ~/.claude/skillsとls .claude/skillsで導入済みSkillを一覧する（すべて読み取りのみ）。\n\nよくある失敗：\n・見つけた機能を片っ端から導入してしまう（全部乗せゴーレム化）→導入順トリガー表に戻り「今、実際に困っているか」を確認する\n・CLAUDE.mdに「絶対にXするな」と書いて満足する→それは強制ではなくお願い。確実性が要るならpermission denyかHook' },
+  ],
+  quiz:[
+    { q:'「.envファイルは絶対に編集させたくない」という要件を確実に満たすには、どうするのが正しいか？',
+      c:['CLAUDE.mdに「.envは絶対に編集しないこと」と書く','Permissionのdenyルール（Edit(.env)）またはPreToolUse Hookでブロックする','Skillの本文に「.envに触れる前に確認すること」と書く'],
+      a:1, ex:'「Never do X」はCLAUDE.md・Skillでは強制力を持たない。確実に阻止するにはpermissionのdenyかHookが必要。' },
+    { q:'数百ファイルを横断調査するが、メインの会話には要点だけを返したい。この要件に最も適した機能は？',
+      c:['Skillとして手順を切り出す','サブエージェントに調査を委譲する','CLAUDE.mdに調査手順を書いておく'],
+      a:1, ex:'目的はコンテキスト隔離であり、読み込んだ内容はサブエージェントの窓に閉じ込められ要約だけが返る。' },
+    { q:'「ブラウザタブから同じデータを何度もコピーしてClaudeに貼っている」ことに気づいた。導入順トリガー表に従うと、次に追加すべきものは？',
+      c:['Hookを書いて自動化する','そのシステムをMCPサーバーとして接続する','サブエージェントを増やして並列化する'],
+      a:1, ex:'同じデータの繰り返しコピペは外部接続不足のサインで、導入順トリガー表ではMCP接続が対応する。' },
+  ]},
+];
+</script>
+<script>
+/* ============================================================
+   データ2: 闘技場（J章32問）・実践（G/K章）・掟（H章）・図鑑
+   ============================================================ */
+const ARENA = {
+  beginner: { name:'見習い試験', pal:'blue', sprite:'slime', enemy:'型なしスライムの群れ', qs:[
+    { id:'b1', q:'ファイル編集後に必ずPrettierを実行したい。Claudeの気分に左右されたくない場合、最も適切な機能は？',
+      c:['CLAUDE.mdに「編集後はPrettierを実行する」と書く','PostToolUse Hookでコマンドを設定する','Skillとして/formatコマンドを作る'], a:1,
+      ex:'HookはdeterministicでClaudeの判断を経ず必ず発火する。CLAUDE.mdとSkillはadvisory（お願い）でありモデルの判断に依存するため保証がない。', rev:'クエスト6' },
+    { id:'b2', q:'CLAUDE.mdに「pushの前に必ずtestを実行する」と書いたのに、Claudeがtestを飛ばしてpushしてしまった。原因は？',
+      c:['バグである','CLAUDE.mdはシステムプロンプトではなく、その後に続くユーザーメッセージとして投入される文脈であり、厳密な遵守は保証されない','CLAUDE.mdのファイル名が間違っている'], a:1,
+      ex:'特定のタイミングで必ず実行されるべき指示はCLAUDE.mdではなくHookに書くべき、というのが公式が明記する対処法である。', rev:'クエスト3' },
+    { id:'b3', q:'新しいSkillを作ったが、Claudeが自動的に使ってくれない。最初に見直すべきものは？',
+      c:['SKILL.md本文をもっと詳しく長く書く','frontmatterのdescriptionを具体的に書き直す','ファイル名を英語にする'], a:1,
+      ex:'descriptionはClaudeがそのSkillを発火させるか判定する主な手がかりである。本文の詳しさよりdescriptionの質が発火率の大半を左右する。', rev:'クエスト4' },
+    { id:'b4', q:'社内Slackへの自動投稿、DBへのクエリ発行。これらを実現する機能は？',
+      c:['Skill','MCP','CLAUDE.md'], a:1,
+      ex:'外部サービスへの実際のツール接続（アクション実行）はMCPの役割。Skillは使い方を教える側で、接続そのものは提供しない。', rev:'クエスト8' },
+    { id:'b5', q:'サブエージェントに調査を委譲したところ、これまでの会話で共有していた前提条件を踏まえずに動いた。なぜか？',
+      c:['サブエージェントがバグっている','サブエージェントは新しい独立したコンテキストウィンドウで始動し、会話履歴は見えない。委譲メッセージの要約のみが渡る','サブエージェントは常に会話全体を引き継ぐ仕様である'], a:1,
+      ex:'forkを除き、サブエージェントは会話履歴を一切引き継がない。伝えたい前提は委譲メッセージに明示的に書く必要がある。', rev:'クエスト10' },
+    { id:'b6', q:'あるツール呼び出しがpermissionのdenyルールとallowルールの両方に該当した。どちらが勝つか？',
+      c:['allow（より新しい設定が勝つ）','deny（評価順は常にdeny・ask・allowの順）','ルールの詳細度が高い方が勝つ'], a:1,
+      ex:'permissionルールの評価順は常にdeny・ask・allowの順で固定されており、ルールの詳細度は評価順を変えない。', rev:'クエスト2' },
+    { id:'b7', q:'Managed settingsとUser settingsで同じ設定キーが競合した。どちらが勝つか？',
+      c:['User（本人の設定が優先される）','Managed（組織配布の強制設定は個人設定で上書きできない）','後から書いた方が勝つ'], a:1,
+      ex:'通常の設定キーは階層の上位が下位を上書きする。Managedは組織全体の強制設定で階層の最上位に位置する。', rev:'クエスト2' },
+    { id:'b8', q:'Hookスクリプトが危険なコマンドを検出し、実行を確実にブロックしたい。正しい終了の仕方は？',
+      c:['標準出力にJSONを出してexit 0','標準エラー出力に理由を出力してexit 2','exit 1で何も出力しない'], a:1,
+      ex:'exit 2はブロッキングエラーとして扱われ、標準エラー出力の内容がClaudeへのフィードバックとして表示される。exit 0はJSON処理、それ以外は非ブロッキング扱いになる。', rev:'クエスト7' },
+    { id:'b9', q:'プロジェクトメンバー全員に同じSkillを配りたい。どこに置くべきか？',
+      c:['ホームディレクトリの個人用skillsフォルダ','プロジェクトルートの.claude/skills（Gitで共有）','どちらでも同じ'], a:1,
+      ex:'project scopeはバージョン管理に含まれチーム全体で共有される。user scopeは個人の全プロジェクト共通で他人とは共有されない。', rev:'クエスト4' },
+    { id:'b10', q:'ローカルでnpx起動するMCPサーバーと、リモートURLで接続するMCPサーバー。それぞれのtransportは？',
+      c:['どちらもstdio','前者はstdio、後者はStreamable HTTP','前者はHTTP、後者はstdio'], a:1,
+      ex:'ローカルプロセスはサブプロセスとして起動するstdio、リモートサービスはHTTP POSTとSSEによるStreamable HTTPが基本の使い分けである。', rev:'クエスト8' },
+  ]},
+  middle: { name:'職人検定', pal:'green', sprite:'goblin', enemy:'半端仕掛けゴブリンの精鋭', qs:[
+    { id:'m1', q:'SKILL.mdのdescriptionが長く、フォーマッターで自動改行されてから、スキルが一覧に出てこなくなった。原因と対策は？',
+      c:['本文が短すぎるので本文を増やす','frontmatterのパースが改行で失敗している。YAML block scalar（複数行記法）を使う','nameフィールドの綴りが間違っている'], a:1,
+      ex:'description改行によるfrontmatterパースエラーはスキル発火トラブルの主要原因の一つ。block scalarを使えば複数行でも安全にパースされる。', rev:'クエスト5' },
+    { id:'m2', q:'matcherに小文字で"bash"と設定したところ、Bashツール使用時にHookが発火しなかった。原因は？',
+      c:['matcherは大文字小文字を区別するため、正しくは"Bash"と書く必要がある','matcherは常に大文字小文字を無視する','Hookの登録自体が失敗している'], a:0,
+      ex:'matcherは大文字小文字を区別する。ツール名は正確な表記（Bash）でなければマッチしない。', rev:'クエスト6' },
+    { id:'m3', q:'Hookでexit 2を返しつつ、標準出力にも構造化されたJSONを出力した。Claudeはどちらを参照するか？',
+      c:['両方を合成して判断する','exit 2の場合JSONは無視され、標準エラー出力のみが処理される','JSON側が優先される'], a:1,
+      ex:'標準出力のJSONが処理されるのはexit codeが0の時のみ。exit 2はブロッキングエラーとして標準エラー出力のみが扱われ、JSONとの併用はできない。', rev:'クエスト7' },
+    { id:'m4', q:'同名のMCPサーバーがlocalとprojectの両方に定義されている。どちらが接続されるか？',
+      c:['project（チーム設定が優先される）','local（local・project・userの順で最優先スコープのみが有効）','両方同時に接続される'], a:1,
+      ex:'同名serverが複数スコープにある場合はlocal・project・userの優先順位で、最優先のスコープの定義のみが接続される。', rev:'クエスト9' },
+    { id:'m5', q:'新しいMCPサーバーをチーム全員が使えるようにしたい。追加時にどのscopeを指定すべきか？',
+      c:['local scope','project scope（設定ファイルをGitにコミット）','user scope'], a:1,
+      ex:'localとuserは個人設定として保存され本人のみが対象。projectだけがリポジトリ経由でGit共有され、チーム全体に届く。', rev:'クエスト9' },
+    { id:'m6', q:'「vendorディレクトリは調査対象外」というルールをCLAUDE.mdに書いておいたが、Exploreサブエージェントに調査を頼んだらvendorまで読み込んでしまった。原因は？',
+      c:['Exploreがバグっている','Explore・PlanはCLAUDE.mdを読み込まない仕様なので、委譲メッセージ自体にルールを明記する必要がある','CLAUDE.mdの記述場所が間違っている'], a:1,
+      ex:'Explore・Planは起動を高速・低コストに保つため、CLAUDE.mdとgit statusを読み込まない。他の組み込み・カスタムサブエージェントはこの2つを読む。', rev:'クエスト10' },
+    { id:'m7', q:'サブエージェントAがサブエージェントBを生成し、Bがさらに別のサブエージェントを生成し、と続けたらどこかで止まった。何が起きたか？',
+      c:['無限にネストできるはずなのでバグ','ネストの深さ上限に達し、それ以上Agentツールが渡されなくなった','メインの会話がクラッシュした'], a:1,
+      ex:'サブエージェントのネストには固定の深さ上限がある。上限に達したサブエージェントにはAgentツール自体が渡されない。', rev:'クエスト11' },
+    { id:'m8', q:'幅広いBashコマンド群をdenyに設定した上で、その中の1つだけをallowに追加した。そのコマンドは実行できるか？',
+      c:['できる（allowが個別に上書きする）','できない（denyルールはallowlist例外を持てず常に勝つ）','確認プロンプトが出る'], a:1,
+      ex:'広いdenyルールは、より狭いallowルールがあっても常に勝つ。一部だけ許可したいという設計はdenyルールでは表現できない。', rev:'クエスト2' },
+    { id:'m9', q:'CLAUDE.mdが300行を超え、Claudeが一部のルールを守らなくなってきた。適切な対処は？',
+      c:['さらにルールを追記して強調する','既に守られている指示は削除するか、確実に実行させたいものはHookに移す','段落の順番を入れ替えるだけにする'], a:1,
+      ex:'行数が増えると文脈消費が増え、重要なルールが埋もれてClaudeが一部を無視するようになる傾向がある。既に正しく動いている指示は消すかHookに変換するのが対処法である。', rev:'クエスト3' },
+    { id:'m10', q:'git commit実行前にコミットメッセージの内容を検証し、条件を満たさなければブロックしたい。どのイベントで実装すべきか？',
+      c:['PostToolUse（実行後に検証）','PreToolUse（実行直前、ブロック可能）','Stop（応答完了後）'], a:1,
+      ex:'実行前の検証・ブロックはPreToolUseの役割。PostToolUseは既に実行済みでアンドゥ不可、Stopはタイミングが遅すぎる。', rev:'クエスト7' },
+  ]},
+  advanced: { name:'秘伝皆伝試験', pal:'purple', sprite:'ghost', enemy:'混同亡霊の軍勢', qs:[
+    { id:'a1', q:'.envファイルは絶対に編集させたくない。CLAUDE.mdに「.envは編集しない」と書くだけで十分か？',
+      c:['十分。CLAUDE.mdの指示は強制力を持つ','不十分。禁止指示はCLAUDE.mdでは「お願い」に過ぎず、確実に止めるにはpermissionのdenyルールかPreToolUse Hookが必要','Skillに書けば十分'], a:1,
+      ex:'CLAUDE.md・Skillはどちらもadvisory。確実な禁止（ガードレール）にはpermission denyルールかHookによる強制実行が必要というのが公式の原則である。', rev:'クエスト3・6' },
+    { id:'a2', q:'デプロイ手順を毎回同じコマンドで実行したいが、状況に応じて多少の判断も必要。適切な機能は？',
+      c:['Hook（判断不要な機械的処理向け）','Skill（手順に解釈・判断の余地がある複数ステップのワークフロー）','サブエージェント（コンテキスト隔離が主目的）'], a:1,
+      ex:'完全に機械的で判断不要ならHookでもよいが、Claudeの解釈が入る複数ステップの手順はSkillの典型例。サブエージェントはコンテキスト隔離が目的でこの要件の核心とは別軸。', rev:'クエスト4・6' },
+    { id:'a3', q:'クリティカルなファイルが編集されたら、自動でSlackに通知したい。どう組み合わせるべきか？',
+      c:['CLAUDE.mdに「編集したらSlackに知らせる」と書く','PostToolUse Hook経由でMCPを呼びSlackに通知を送る','Skillでコマンドを作り手動実行する'], a:1,
+      ex:'確実な発火（Hook）と外部接続（MCP）を組み合わせるのが正しい設計。CLAUDE.mdは保証がなく、Skillは手動実行前提で「自動で」という要件を満たさない。', rev:'クエスト7・8' },
+    { id:'a4', q:'PreToolUse Hookが「allow」を返したが、同じツール呼び出しがpermissionのdenyルールにも該当していた。実行されるか？',
+      c:['Hookのallowが優先されて実行される','denyルールが常に優先され、Hookの判断はdeny・askルールを上書きできない','どちらか早く評価された方が勝つ'], a:1,
+      ex:'PreToolUse Hookはpermissionプロンプトの前に走るが、Hookの判断はdeny・askルールを上書きできない。deny優先の原則が常に勝つ。', rev:'クエスト2・7' },
+    { id:'a5', q:'個人的な実験段階のSkillを、他プロジェクトへ配る予定もなく作りたい。standaloneとPlugin、どちらが適切か？',
+      c:['Plugin化してマーケットプレイスに公開する','standalone（プロジェクト直下のskillsフォルダ）。配布・再利用の必要が出てからPlugin化を検討する','必ず両方同時に用意する'], a:1,
+      ex:'standaloneは個人ワークフロー・プロジェクト固有カスタマイズ・実験段階向き。チーム配布や複数プロジェクトでの再利用が必要になった時点でPlugin化するのが公式の判断基準。', rev:'クエスト12' },
+    { id:'a6', q:'セキュリティ・パフォーマンス・テストの3観点で、互いに発見を共有しながら議論させてレビューしたい。サブエージェントとAgent teams、どちらが適切か？',
+      c:['サブエージェント（並列起動すれば十分）','Agent teams（チームメイト同士が直接メッセージし合う相互コミュニケーションが要件のため）','どちらでも同じ結果になる'], a:1,
+      ex:'単なる要約返却で足りるならサブエージェントで十分だが、互いに発見を共有し議論する相互コミュニケーションが要件ならAgent teams。サブエージェントはメインにのみ結果を報告する一方通行の構造。', rev:'クエスト11・12' },
+    { id:'a7', q:'同名のSkillがmanaged・user・projectの3スコープに存在する。どれが有効になるか？',
+      c:['project（最も具体的だから）','managed（managed・user・projectの優先順位）','全部マージされて使える'], a:1,
+      ex:'Skillの名前が重複した場合はmanaged・user・projectの優先順位で1つが勝つ。CLAUDE.mdは全レベルが加算されるが、Skillは名前重複時に優先度の高い方のみ採用される点が異なる。', rev:'クエスト12' },
+    { id:'a8', q:'野良のMCPサーバーを見つけた。追加する前に最も確認すべきことは？',
+      c:['動作が速いかどうか','そのサーバーの提供元を信頼できるか（コード・提供者の確認）','公開先のスター数が多いかどうか'], a:1,
+      ex:'stdioサーバーの追加は任意プログラムの実行許可と同義。Anthropicはディレクトリ掲載前の基準レビューはするが、セキュリティ監査は行わない。', rev:'クエスト9' },
+  ]},
+  boss: { name:'工房マイスター認定戦', pal:'bossdrag', sprite:'dragon', enemy:'混沌竜ツカイワケズ', boss:true, qs:[
+    { id:'z1', q:'次の4つの要件を、それぞれ正しい機能に振り分けよ。\n①「pnpmを使う」という規約は毎回知っておいてほしい\n②「PRレビュー手順」は複数ステップで判断も要る\n③「Slackへの通知」は外部接続が要る\n④「大量のログ解析」はメインの会話を汚したくない',
+      c:['規約はSkill、PRレビューはCLAUDE.md、Slackはサブエージェント、ログ解析はMCP','規約はCLAUDE.md、PRレビューはSkill、SlackはMCP、ログ解析はサブエージェント','規約はCLAUDE.md、PRレビューはMCP、SlackはSkill、ログ解析はサブエージェント'], a:1,
+      ex:'常時ロードすべき短い規約はCLAUDE.md、判断を伴う複数ステップの手順はSkill、外部サービスへの実際の接続はMCP、大量出力を隔離したい調査はサブエージェント。4機能は常時文脈・オンデマンド手順・外部接続・文脈分離という異なる軸に対応している。', rev:'クエスト12', boss:true },
+    { id:'z2', q:'本番環境のDBに書き込むコマンドは絶対に自動実行させたくない。CLAUDE.mdに禁止を書いた上で、念のためSkillにも同じ注意書きを足した。この設計は十分か？',
+      c:['十分。二重に書けば、CLAUDE.mdとSkill両方の効果で確実にブロックされ安心できる','不十分。CLAUDE.mdもSkillもadvisoryで強制力がなく、確実な禁止にはdenyルールかHookが必要','不十分。Hookをやめて、判断も実行もすべてサブエージェントに任せるべきである'], a:1,
+      ex:'CLAUDE.md・Skillはどちらもモデルへの「お願い」であり保証がない。性質が同じものを二重に書いても強制力は生まれない。ガードレールが必要な操作は必ずpermission denyかHookで実装する。', rev:'クエスト2・3・6', boss:true },
+    { id:'z3', q:'同僚が「便利だから」とチームのsettings.jsonに他社製のHookとMCPサーバー設定を追加するPRを出してきた。中身は未レビュー。マージしてよいか？',
+      c:['同僚を信頼しているので、Hookやサーバーの中身を確認せずそのままマージしてよい','マージ前に、Hookのcommandフィールド（任意シェルコマンド実行）とMCPサーバーの提供元・起動コマンドを必ずレビューする。信頼できないなら差し戻す','Hookのcommandとサーバーの提供元は確認せず、動けばそのまま使って良い'], a:1,
+      ex:'Hookのcommandフィールドはシェルコマンドを直接実行でき、MCP stdioサーバーの追加も任意プログラムの実行許可に等しい。どちらも高い信頼を要する設定であり、無検査の取り込みは任意コード実行のリスクそのものである。', rev:'クエスト6・9', boss:true },
+    { id:'z4', q:'機能実装を5つのサブエージェントに完全並列で分担させれば5倍速くなると提案された。この提案の妥当性と、代わりに検討すべき設計は？',
+      c:['妥当。5並列にすればコストは変わらず速度だけ5倍になるので、すぐに5並列で実装させるべきである','妥当でない。コーディングは密結合で真に並列化できる部分が少なく、コストも大きく増える。調査だけサブエージェントで並列化し、実装本体は単一セッションで進める方が適切','妥当でない。並列化自体をやめて、実装作業をすべてHookに置き換えて自動化して管理するべきである'], a:1,
+      ex:'密結合なコーディングタスクの並列化効果は薄く、マルチエージェント構成はトークンコストが増大する。並列化が効くのは独立した調査のような分割可能タスク。「機能が多いほど・並列にするほど良い」という思い込みは判断そのものを誤らせる。', rev:'クエスト11・12', boss:true },
+  ]},
+};
+
+/* ---------- 実践クエスト（G章）＋最終ボス戦（K章） ---------- */
+const JISSEN = [
+  { id:'g1', name:'レベル1：読み取り偵察「静かな棚卸し」', badge:'observer', badgeName:'🔍 偵察バッジ', xp:100,
+    desc:'目的：自分の環境に、五つの秘伝がそれぞれいくつ・どのスコープに存在するかを棚卸しする。一切変更しない。（詳細手順は教材G章）',
+    checks:[
+      '/permissionsを実行し、現在の許可ルールがどのスコープ（Managed/Local/Project/User）由来かを確認した',
+      '/doctorを実行し、設定診断の結果（警告・エラーの有無）を確認した',
+      'claude mcp listを実行し、接続済みMCPサーバーとその状態を確認した',
+      'ホームディレクトリの.claude以下を一覧し、settings.json・CLAUDE.md・skills・agentsの有無を確認した',
+      '現在のプロジェクトの.claude以下を一覧し、settings.json・settings.local.json・skills・agents・hooks設定の有無を確認した',
+      '見つけたことを「今この環境に何が導入されているか」3行のメモにした',
+      'git statusがclean（自分は何も変更していない）と確認した',
+    ]},
+  { id:'g2', name:'レベル2：初めての秘伝書「発火の確認」', badge:'request', needBadge:'observer', badgeName:'📖 秘伝書バッジ', xp:100,
+    desc:'目的：練習用リポジトリにSkillを1つ作り、実際に発火することを確認する。（詳細手順は教材G章）',
+    checks:[
+      '練習用リポジトリの.claude/skills以下にSKILL.mdを作成した',
+      'frontmatterのdescriptionに「何をするか」と「いつ使うか」の両方を書いた',
+      '本文に、実行すれば結果が目に見える簡単な指示を1つ書いた',
+      '新規セッションを開始してから動作を確認した（実行中セッションでは反映されないため）',
+      'descriptionにマッチする依頼で自動発火するか確認し、発火しなければ明示起動で切り分けた',
+      '/doctorでSkillが認識されているかを確認した',
+      'SKILL.md以外のファイルが変更されていないことを確認した',
+    ]},
+  { id:'g3', name:'レベル3：組み合わせ「仕掛けか使い魔」', badge:'parallel', needBadge:'request', badgeName:'⚙️ 組み合わせバッジ', xp:100,
+    desc:'目的：無害なHookを1つ導入する、またはExploreサブエージェントへの委譲を体験する。どちらか一方でよい。（詳細手順は教材G章）',
+    checks:[
+      'Hook版かサブエージェント版か、進める方を1つ選んだ',
+      'Hook版：settings.jsonにNotificationイベントのHookを追加し、matcherを空文字列にして通知のみの無害な設定にした',
+      'Hook版：デスクトップ通知が実際に発火することを確認し、/doctorで認識を確認した',
+      'サブエージェント版：複数ファイルを横断する調査タスクを1つ用意した',
+      'サブエージェント版：Exploreサブエージェントへの委譲メッセージに探索の広さ（thoroughness）を指定した',
+      '結果がメインの会話に要約だけ返ってくることを確認した',
+      '会話履歴が伝わっていない証拠（委譲メッセージに書いていない情報を知らないこと）を1つ確認した',
+    ]},
+  { id:'boss', name:'★ 最終ボス戦「混沌竜ツカイワケズ討伐」', badge:'captain', needBadge:'parallel', badgeName:'⚒ 称号『工房マイスター』', xp:300, needBossQuiz:true,
+    desc:'テーマ：任意の自動化・拡張要件を聞いたとき、CLAUDE.md・Skill・Hook・MCP・サブエージェントのどれで解決すべきかを理由付きで判断し、実際に拡張を1つ導入する——全工程をひとりで。（手順書は教材K章。60〜90分確保・練習リポジトリで）',
+    checks:[
+      'この要件は「確実に実行される」べきか「モデルが判断してよい」ものかを見極めた',
+      '常時ロードすべきか、オンデマンドでよいかを見極めた',
+      '外部サービスへの接続を含むかを確認した',
+      'メインの会話を汚さず隔離したい大量出力を含むかを確認した',
+      '選んだ機能の理由を1行で言えた',
+      'この判断を本番環境でいきなり試そうとしていないか確認した',
+      '導入しようとしている設定・サーバー・Pluginの中身を確認した',
+    ]},
+];
+
+/* ---------- ギルドの掟（H章・要約版） ---------- */
+const OKITE = [
+  ['第一条','練習は必ず練習用リポジトリ・練習用設定で行う。仕事のsettings.jsonを直接いじらない。'],
+  ['第二条','他人のsettings.json・plugin・MCP server の中身を見ずに取り込まない。HookとMCPは任意のプログラム実行を許すのと同じである。'],
+  ['第三条','わからないままbypassPermissionsや全自動承認を設定しない。確認を消す設定は、理解した人だけが使える装備である。'],
+  ['第四条','取り込む前に、scripts/の中身とhooksのcommandフィールドを自分の目で読む。settings.jsonのcommandフィールドは任意のシェルコマンド実行に等しく、プラグイン・マーケットプレイスも中身の安全性まではAnthropicが検証しない。読んでいないコードは動かさない。'],
+  ['第五条','bypassPermissionsは隔離環境専用とする。確認をほぼ全てスキップするモードであり、コンテナ・VM等「Claude Codeが損害を与えられない環境」以外では使わない。'],
+  ['第六条','matcherを空にした全承認のPermissionRequestフックを組まない。matcherは極力狭く指定し、危険操作は必ずdenyに倒す。'],
+  ['第七条','変更を自動でcommit・pushする仕組みを組まない。commitとpushは、必ず人間がdiffを確認した後に手動で行う。'],
+  ['第八条','認証情報をMCPサーバー設定ファイルに直書きしない。環境変数展開などで渡し、コミット前に中身を必ず目視する。'],
+  ['第九条','mcp__のようなツールの一括allowをしない。個別ツール単位でallow・askを設計し、書き込み系の呼び出しはaskに留める。'],
+  ['第十条','AIが提示したdiffやコード提案を見ずに取り込まない。実装した本人は自分の変更に肩入れしがちなので、フレッシュな立場でのレビューも併用し、内容を理解してから採用する。'],
+  ['第十一条','401や403のエラーは認証未完了のサインであり、故障として騒がない。/mcpからのOAuth再認可フローで解決する。'],
+  ['第十二条','困っていないのに拡張機能・権限・ツールを先回りで足さない。不要な拡張はコンテキスト税と攻撃面の両方を増やす。導入は実際に困りごとが起きてから行う。'],
+];
+
+/* ---------- 図鑑（クエストのモンスター＋番外） ---------- */
+const ZUKAN_EXTRA = [
+  { key:'unchecked_plugin', name:'無検査プラグイン魔', sprite:'demon', pal:'reddemon',
+    desc:'「公式マーケットにあれば安全」と思わせ、中身を確認させないまま取り込ませる。掟第四条が弱点。（掟を誓うと討伐扱い）' },
+];
+</script>
+<script>
+/* ============================================================
+   エンジン: 画面制御・バトル・進捗・エンディング
+   操作モデル: 各画面に「操作対象」は常に1つ。
+   ・文字送り中 …………… Enter＝早送り
+   ・▼待ち（msgAdvance）… Enter＝次へ
+   ・それ以外 ……………… その画面のメニュー／キー処理
+   ============================================================ */
+const $ = id=>document.getElementById(id);
+
+const SCREEN_ENTER = {
+  'scr-tutorial': tutEnter,
+  'scr-home': renderHome,
+  'scr-map': renderMap,
+  'scr-arena': renderArena,
+  'scr-jissen': renderJissen,
+  'scr-zukan': renderZukan,
+  'scr-okite': renderOkite,
+  'scr-log': renderLog,
+};
+const KEYS = {};   /* 画面ごとのキー処理 */
+
+/* ---------- キー入力の一元受付 ---------- */
+document.addEventListener('keydown', e=>{
+  const k=e.key;
+  if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter'].includes(k)) return;
+  /* 0. 画面切替の暗転中は無効（連打対策。Codexレビュー反映） */
+  if(transitioning){ e.preventDefault(); return; }
+  /* 1. レベルアップ表示中 */
+  const lu=$('levelup');
+  if(lu.classList.contains('show')){
+    if(k==='Enter'){ lu.classList.remove('show'); SFX.ok(); }
+    e.preventDefault(); return;
+  }
+  /* 2. 文字送り中 → Enterで早送り */
+  if(TYPE.active){
+    if(k==='Enter' && TYPE.el) TYPE.el._skip=true;
+    e.preventDefault(); return;
+  }
+  /* 3. ▼待ち → Enterで次へ */
+  if(k==='Enter' && msgAdvance){
+    const f=msgAdvance; msgAdvance=null; SFX.ok(); f();
+    e.preventDefault(); return;
+  }
+  /* 4. 画面ごとの処理 */
+  const h=KEYS[currentScreen];
+  if(h) h(e,k);
+});
+
+/* ---------- タイトル ---------- */
+const titleMenu = $('title-menu-list');
+(function initTitle(){
+  const existing = load();
+  const contLi = titleMenu.querySelector('[data-act="continue"]');
+  if(!existing){ contLi.classList.add('disabled'); contLi.innerHTML='つづきから <small>（きろく なし）</small>'; }
+  bindMenu(titleMenu, li=>{
+    if(li.dataset.act==='continue'){ const sv=load(); if(!sv){ SFX.miss(); return; } S=sv; goScreen('scr-home'); }
+    if(li.dataset.act==='new'){
+      if(load() && !confirm('「はじめから」を選ぶと、いまの ぼうけんのしょ は消えます。よろしいですか？（Enter＝はい／Esc＝いいえ）')) return;
+      goScreen('scr-name'); initKana();
+    }
+  });
+})();
+KEYS['scr-title'] = e=>{ titleMenu._key && titleMenu._key(e); };
+
+/* ---------- なまえ入力（かな文字盤：十字キー＋Enter） ---------- */
+const KANA_ROWS = [
+  [...'あいうえおかきくけこ'],
+  [...'さしすせそたちつてと'],
+  [...'なにぬねのはひふへほ'],
+  [...'まみむめもやゆよわん'],
+  ['ら','り','る','れ','ろ','ー','゛','゜','けす','おわり'],
+];
+const DAKU = {か:'が',き:'ぎ',く:'ぐ',け:'げ',こ:'ご',さ:'ざ',し:'じ',す:'ず',せ:'ぜ',そ:'ぞ',
+               た:'だ',ち:'ぢ',つ:'づ',て:'で',と:'ど',は:'ば',ひ:'び',ふ:'ぶ',へ:'べ',ほ:'ぼ'};
+const HANDAKU = {は:'ぱ',ひ:'ぴ',ふ:'ぷ',へ:'ぺ',ほ:'ぽ'};
+const NM = { chars:[], r:0, c:0 };
+function initKana(){
+  NM.chars=[]; NM.r=0; NM.c=0;
+  const g=$('kana-grid'); g.innerHTML='';
+  KANA_ROWS.forEach((row,r)=>{
+    row.forEach((ch,c)=>{
+      const d=document.createElement('div');
+      d.className='kana-cell'+(ch.length>1?' cmd':'');
+      d.textContent=ch; d.dataset.r=r; d.dataset.c=c;
+      d.onclick=()=>{ NM.r=r; NM.c=c; paintKana(); kanaAct(); };
+      g.appendChild(d);
+    });
+  });
+  paintKana();
+}
+function paintKana(){
+  document.querySelectorAll('.kana-cell').forEach(d=>{
+    d.classList.toggle('sel', Number(d.dataset.r)===NM.r && Number(d.dataset.c)===NM.c);
+  });
+  $('name-preview').textContent = (NM.chars.join('')+'＊＊＊＊＊＊＊＊').slice(0,8).split('').join(' ');
+}
+function kanaAct(){
+  const ch = KANA_ROWS[NM.r][NM.c];
+  if(ch==='おわり'){
+    const name = NM.chars.join('') || 'ゆうしゃ';
+    S = newSave(name);
+    logAdd(`ぼうけんのしょ を作成（なまえ: ${name}）`);
+    save(); SFX.save();
+    goScreen('scr-tutorial'); return;   /* 最初はClaude Code拡張の基本操作から */
+  }
+  if(ch==='けす'){
+    if(NM.chars.length){ NM.chars.pop(); SFX.move(); } else SFX.miss();
+    paintKana(); return;
+  }
+  if(ch==='゛'||ch==='゜'){
+    const last=NM.chars[NM.chars.length-1];
+    const map = ch==='゛'?DAKU:HANDAKU;
+    if(last && map[last]){ NM.chars[NM.chars.length-1]=map[last]; SFX.ok(); }
+    else SFX.miss();
+    paintKana(); return;
+  }
+  if(NM.chars.length<8){ NM.chars.push(ch); SFX.ok(); } else SFX.miss();
+  paintKana();
+}
+KEYS['scr-name'] = (e,k)=>{
+  const H=KANA_ROWS[0].length, V=KANA_ROWS.length;
+  if(k==='ArrowRight'){ NM.c=(NM.c+1)%H; SFX.move(); }
+  if(k==='ArrowLeft'){ NM.c=(NM.c-1+H)%H; SFX.move(); }
+  if(k==='ArrowDown'){ NM.r=(NM.r+1)%V; SFX.move(); }
+  if(k==='ArrowUp'){ NM.r=(NM.r-1+V)%V; SFX.move(); }
+  if(k==='Enter'){ kanaAct(); }
+  paintKana(); e.preventDefault();
+};
+
+/* ---------- チュートリアル：Claude Code拡張の基本操作 ----------
+   .claudeフォルダの構成・/permissions・CLAUDE.mdのadvisoryな性質・
+   SKILL.mdの書き方・/doctor・hooks・claude mcp list・サブエージェントへの
+   委譲を、模型UIで疑似体験する。壊れないので安心して押せる。 ---------- */
+const TUT_STATE={ i:0 };
+function omTerm(lines, cls){
+  lines.forEach(l=>{
+    const d=document.createElement('div');
+    if(cls) d.className=cls;
+    d.textContent=l;
+    $('om-term-lines').appendChild(d);
+  });
+  $('om-term').scrollTop=$('om-term').scrollHeight;
+}
+function omClearHL(){ document.querySelectorAll('.om-hl').forEach(x=>x.classList.remove('om-hl')); }
+function omShowDiff(on){
+  $('om-diff').style.display = on?'':'none';
+  $('om-term').style.display = on?'none':'';
+  $('om-tab-diff').classList.toggle('active', on);
+  $('om-tab-term').classList.toggle('active', !on);
+}
+/* プレビュー領域（SKILL.md／settings.jsonの中身）の差し替え専用ヘルパー。
+   omTerm・omShowDiffと同様、TUT配列のeffectから呼び出す想定。 */
+function omPreview(filename, rowsHtml){
+  $('om-diff-filename').textContent = filename;
+  $('om-diff-body').innerHTML = rowsHtml;
+}
+const SKILL_MD_ROWS =
+  '<div class="dl"><span class="ln">1</span><code>---</code></div>'+
+  '<div class="dl"><span class="ln">2</span><code>name: example-skill</code></div>'+
+  '<div class="dl"><span class="ln">3</span><code>description: gitのコミットメッセージ作成を支援する。ユーザーが「コミットして」等と言った時に使う。</code></div>'+
+  '<div class="dl"><span class="ln">4</span><code>---</code></div>'+
+  '<div class="dl"><span class="ln">5</span><code></code></div>'+
+  '<div class="dl"><span class="ln">6</span><code>1. git diffで変更内容を確認する</code></div>'+
+  '<div class="dl"><span class="ln">7</span><code>2. 変更の意図を要約する</code></div>'+
+  '<div class="dl"><span class="ln">8</span><code>3. コミットメッセージ案を提示する</code></div>';
+const SETTINGS_BEFORE_ROWS =
+  '<div class="dl"><span class="ln">1</span><code>{</code></div>'+
+  '<div class="dl"><span class="ln">2</span><code>  "permissions": { ... }</code></div>'+
+  '<div class="dl"><span class="ln">3</span><code>}</code></div>';
+const SETTINGS_AFTER_ROWS =
+  '<div class="dl"><span class="ln">1</span><span class="ln">1</span><code>  {</code></div>'+
+  '<div class="dl"><span class="ln">2</span><span class="ln">2</span><code>    "permissions": { ... },</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">3</span><code>+   "hooks": {</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">4</span><code>+     "PreToolUse": [</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">5</span><code>+       {</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">6</span><code>+         "matcher": "Bash",</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">7</span><code>+         "hooks": [</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">8</span><code>+           { "type": "command", "command": "scripts/check.sh" }</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">9</span><code>+         ]</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">10</span><code>+       }</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">11</span><code>+     ]</code></div>'+
+  '<div class="dl addl"><span class="ln"></span><span class="ln">12</span><code>+   }</code></div>'+
+  '<div class="dl"><span class="ln">3</span><span class="ln">13</span><code>  }</code></div>';
+const TUT=[
+  { msg:'ここでは、Anthropicが提供する公式CLIコーディングエージェント、Claude Codeの基本操作を確認する。右側のEXPLORERはプロジェクトのファイル構成、中央はClaude Codeとの対話セッション（ターミナル）、上部のタブでファイル内容のプレビューに切り替えられる。まずはファイル構成から見ていこう。' },
+  { hl:'cc-file-claude',
+    msg:'.claudeフォルダには、Claude Codeの設定関連ファイルがまとまっている。開いて中身を確認しよう。settings.json（権限やフックの設定）、skills（スキル定義）、agents（サブエージェント定義）が入っている。なお、CLAUDE.md（指示書）はプロジェクト直下、.claudeの外に置かれる。',
+    effect:()=>{
+      $('cc-file-claude').textContent='▾ .claude';
+      $('cc-file-settings').style.display='';
+      $('cc-file-skills').style.display='';
+      $('cc-file-agents').style.display='';
+      $('cc-file-claudemd').style.display='';
+    } },
+  { hl:'om-term',
+    msg:'つづいて権限まわりの土台を確認する。セッション内で/permissionsを実行すると、現在の権限設定（許可・確認が必要・拒否）が一覧表示される。設定はプロジェクト用の.claude/settings.jsonや、個人ローカル用の.claude/settings.local.jsonに保存される。',
+    effect:()=>{ omTerm(['> /permissions','Allow: Read, Grep, Glob','Ask: Bash(git push*), Edit','Deny: なし','設定元: .claude/settings.json'],'om-sys'); } },
+  { hl:'cc-file-claudemd',
+    msg:'CLAUDE.mdは、プロジェクトのルートなどに置く指示書だ。コーディング規約やプロジェクト固有の注意点を書いておくと、Claude Codeがセッション開始時に読み込む。' },
+  { msg:'重要な点として、CLAUDE.mdはツールによって強制されるルールファイルではない。Claudeが読んで従うことを期待する、助言的（advisory）な文書という性質を持つ。書けば必ず守られる設定ファイルとは異なるため、権限そのものを制御したい場合は.claude/settings.json側の設定と組み合わせる。' },
+  { hl:'cc-file-skills',
+    msg:'スキルは、特定の作業を行うための手順書だ。.claude/skills配下にスキルごとのフォルダを作り、その中にSKILL.mdを置く。冒頭のfrontmatter（YAML形式）にnameとdescriptionを書いておくと、Claudeがdescriptionの内容をもとに「いつ使うか」を自動的に判断する。',
+    effect:()=>{
+      $('cc-file-skills').textContent='▾ skills';
+      $('cc-file-skillmd').style.display='';
+    } },
+  { hl:'om-tab-diff',
+    msg:'上部のプレビュータブに切り替えて、実際のSKILL.mdの中身を確認しよう。',
+    effect:()=>{ omShowDiff(true); omPreview('.claude/skills/example-skill/SKILL.md', SKILL_MD_ROWS); } },
+  { hl:'om-term',
+    msg:'/doctorを実行すると、環境診断ができる。設定ファイルの不備やインストール状態を確認したいときに使う。',
+    effect:()=>{ omShowDiff(false); omTerm(['> /doctor','設定ファイル: 問題なし','権限設定: 読み込み済み','MCPサーバー: 2件検出'],'om-sys'); } },
+  { hl:'cc-file-settings',
+    msg:'フック（hooks）は、特定のタイミングで自動的にコマンドを実行させる仕組みだ。.claude/settings.jsonのhooksキーに、PreToolUseやPostToolUseといったイベント名と、実行したいコマンドを対応づけて書く。',
+    effect:()=>{ omShowDiff(true); $('om-tab-diff').textContent='settings.json'; omPreview('.claude/settings.json', SETTINGS_BEFORE_ROWS); } },
+  { hl:'om-tab-diff',
+    msg:'settings.jsonにhooksを追加すると、次のようになる。PreToolUseにBashを指定し、コマンド実行前にチェックスクリプトを走らせる例だ。',
+    effect:()=>{ omPreview('.claude/settings.json', SETTINGS_AFTER_ROWS); } },
+  { hl:'om-term',
+    msg:'MCP（外部ツール連携）の接続状況は、ターミナルからclaude mcp listで確認できる。セッション内では/mcpでも同じ内容を確認できる。',
+    effect:()=>{ omShowDiff(false); omTerm(['> claude mcp list','github        connected','notion        connected','slack         not connected'],'om-sys'); } },
+  { hl:'cc-file-agents',
+    msg:'サブエージェントは、.claude/agents配下にfrontmatterでname・description・tools等を定義したMarkdownファイルとして用意する。メインのClaudeが会話の中でこれらに作業を振り分けることを、ここでは委譲と呼ぶ。作成したサブエージェント定義はls .claude/agents/で確認できる。かつての/agents対話ウィザードは廃止され、今はClaudeに依頼するか.claude/agents/を直接編集して作る。',
+    effect:()=>{ omTerm(['> ls .claude/agents/','safe-researcher.md','code-reviewer.md'],'om-sys'); } },
+  { msg:'ここまでの内容を踏まえて確認しよう。CLAUDE.mdと.claude/settings.jsonの役割の違いとして正しいものはどれか。',
+    opts:[ {t:'CLAUDE.mdは助言的な指示書、.claude/settings.jsonは権限やフックを実際に制御する設定ファイルである', ok:1},
+           {t:'CLAUDE.mdと.claude/settings.jsonはどちらも同じ強制力を持つ設定ファイルである', ok:0},
+           {t:'CLAUDE.mdはツールの権限を強制的に制御するファイルである', ok:0} ],
+    wrong:'正解は1番。CLAUDE.mdはClaudeが読んで従うことを期待する助言的な文書であり、ツールによって強制はされない。実際に権限やフックの動作を制御するのは.claude/settings.jsonである。両者の役割は異なる。' },
+  { msg:'お疲れさま。.claudeフォルダの構成、/permissions、CLAUDE.mdの助言的な性質、SKILL.mdの書き方、/doctor、hooks、claude mcp list、サブエージェントへの委譲という、Claude Codeの基本操作をひととおり確認した。実際のプロジェクトでも、この並びで設定を見ていくとよい。' },
+];
+function tutEnter(){
+  TUT_STATE.i=0;
+  ['om-tab-diff','om-diff','om-statusline'].forEach(id=>$(id).style.display='none');
+  $('om-tab-term').style.display='';
+  $('om-agent').style.display='';
+  $('om-agent-name').textContent='rpg-learning-app';
+  $('om-term').style.display='';
+  $('om-tab-term').classList.add('active');
+  $('om-tab-diff').classList.remove('active');
+  $('om-tab-term').textContent='▸ session';
+  $('om-tab-diff').textContent='SKILL.md';
+  $('om-term-lines').innerHTML='<div class="om-sys">（ここにClaude Codeとのやり取りが表示される）</div>';
+  ['cc-file-settings','cc-file-skills','cc-file-skillmd','cc-file-agents','cc-file-claudemd'].forEach(id=>$(id).style.display='none');
+  $('cc-file-claude').textContent='▸ .claude';
+  $('tut-cmd').style.display='none';
+  omClearHL();
+  tutStep();
+}
+function tutStep(){
+  const st=TUT[TUT_STATE.i];
+  if(!st) return tutFinish();
+  omClearHL(); $('tut-cmd').style.display='none';
+  if(st.hl) $(st.hl).classList.add('om-hl');
+  typewrite($('tut-msg'), st.msg, $('tut-cursor'), ()=>{
+    if(st.opts){
+      const ul=$('tut-menu'); ul.innerHTML='';
+      st.opts.forEach(o=>{
+        const li=document.createElement('li');
+        li.textContent=o.t; li.dataset.ok=o.ok?'1':'';
+        ul.appendChild(li);
+      });
+      $('tut-cmd').style.display='';
+      bindMenu(ul, li=>{
+        if(li.dataset.ok){
+          $('tut-cmd').style.display='none';
+          if(st.effect) st.effect(li);
+          TUT_STATE.i++; tutStep();
+        } else {
+          SFX.miss();
+          $('tut-cursor').style.display='none';
+          typewrite($('tut-msg'), st.wrong||'ちがうようだ。もういちど考えよう。', null);
+        }
+      });
+    } else {
+      msgAdvance=()=>{ if(st.effect) st.effect(); TUT_STATE.i++; tutStep(); };
+    }
+  });
+  $('tut-msg').parentElement.onclick=()=>{
+    if(TYPE.active){ $('tut-msg')._skip=true; return; }
+    if(msgAdvance){ const f=msgAdvance; msgAdvance=null; SFX.ok(); f(); }
+  };
+}
+function tutFinish(){
+  if(!S.tutDone){
+    S.tutDone=true;
+    logAdd('チュートリアル「Claude Code拡張の基本操作」修了');
+    gainXP(50,'チュートリアル修了');
+  }
+  save();
+  goScreen('scr-home');
+}
+let tutPaused=null;
+function tutPause(){
+  tutPaused = msgAdvance; msgAdvance = null;   /* ▼待ちを一時退避 */
+  const ul=$('tut-menu'); ul.innerHTML='';
+  [['cont','チュートリアルを つづける'],['exit','ギルドへ もどる（あとから再開できる）']].forEach(([a,t])=>{
+    const li=document.createElement('li'); li.dataset.act=a; li.textContent=t; ul.appendChild(li);
+  });
+  $('tut-cmd').style.display='';
+  bindMenu(ul, li=>{
+    $('tut-cmd').style.display='none';
+    if(li.dataset.act==='exit'){ tutPaused=null; goScreen('scr-home'); return; }
+    msgAdvance = tutPaused; tutPaused = null;
+  });
+}
+KEYS['scr-tutorial'] = (e,k)=>{
+  if($('tut-cmd').style.display!=='none'){ $('tut-menu')._key && $('tut-menu')._key(e); return; }
+  if(k==='ArrowLeft'){ tutPause(); e.preventDefault(); }
+};
+
+/* ---------- ギルド（ホーム／ハブ） ---------- */
+const homeMenu = $('home-menu');
+bindMenu(homeMenu, li=>{
+  if(li.id==='sndtoggle'){ sndOn=!sndOn; li.textContent='おと：'+(sndOn?'ON':'OFF'); return; }
+  goScreen(li.dataset.go);
+});
+KEYS['scr-home'] = e=>{ homeMenu._key && homeMenu._key(e); };
+function renderHome(){
+  $('tut-item').innerHTML = 'チュートリアル　—　Claude Code拡張の基本操作'
+    + (S.tutDone ? '　<small>✔ 修了ずみ（復習できる）</small>' : '　<small>◀ まずはここ！</small>');
+  const lv=levelOf(S.xp), nx=nextLevel(S.xp);
+  const total=20;
+  let fillN;
+  if(!nx){ fillN=total; }
+  else{ const base=lv.xp, span=nx.xp-base;
+    fillN=Math.max(0,Math.min(total,Math.round((S.xp-base)/span*total))); }
+  $('status-box').innerHTML =
+    `<div class="stat-row"><span>なまえ</span><span class="v">${esc(S.name)}</span></div>`+
+    `<div class="stat-row"><span>レベル</span><span class="v">${lv.lv}</span></div>`+
+    `<div class="stat-row"><span>しょうごう</span><span class="v">${S.badges.includes('captain')?'工房マイスター':lv.title}</span></div>`+
+    `<div class="stat-row"><span>けいけんち</span><span class="v">${S.xp}</span></div>`+
+    `<div class="stat-row"><span>つぎまで</span><span class="v">${nx?(nx.xp-S.xp):'─'}</span></div>`+
+    `<div class="gauge">ＥＸＰ <span class="fill">${'▓'.repeat(fillN)}</span><span class="rest">${'▓'.repeat(total-fillN)}</span></div>`;
+  const B=[['observer','🔍 偵察バッジ'],['request','📖 秘伝書バッジ'],
+    ['parallel','⚙️ 組み合わせバッジ'],['shield','🔒 安全運用バッジ'],
+    ['captain','⚒ 称号『工房マイスター』']];
+  $('badge-box').innerHTML =
+    B.map(([k,n])=>`<div class="${S.badges.includes(k)?'':'off'}">${S.badges.includes(k)?n:'？？？？'}</div>`).join('')+
+    `<div style="margin-top:8px; font-size:15px; color:var(--gray);">クエスト ${S.cleared.length}／12 クリア　討伐 ${S.defeated.length}体</div>`;
+  const next=QUESTS.find(q=>!S.cleared.includes(q.id));
+  let msg;
+  if(S.badges.includes('captain')){
+    msg=`おかえりなさい、${S.name}マイスター！\n工房いちどうは あなたの あゆみを ほこりに おもいます。\nつぎは じぶんの プロジェクトへ、ちいさな拡張から はじめよう。`;
+  } else if(!next){
+    msg=`ぜんクエスト クリア！\nのこるは「じっせん」の さいしゅうボスせん だけだ。\nじゅんびが できたら いどむがよい。`;
+  } else {
+    msg=`ようこそ ＡＩさぎょうギルドへ、${S.name}どの！\nつぎのしれんは クエスト${next.id}「${next.name}」。\n「ちず」から しゅっぱつだ。じつぶつの Claude Codeを さわる かだいは「じっせん」に。`;
+  }
+  typewrite($('home-msg'), msg, $('home-cursor'));
+  $('home-msg').parentElement.onclick=()=>{ $('home-msg')._skip=true; };
+}
+
+/* ---------- ちず ---------- */
+function renderMap(){
+  const ul=$('map-list'); ul.innerHTML='';
+  const unlocked=Math.min(12,(S.cleared.length?Math.max(...S.cleared):0)+1);
+  QUESTS.forEach(q=>{
+    const li=document.createElement('li');
+    const cleared=S.cleared.includes(q.id);
+    const canGo=q.id<=unlocked;
+    if(cleared) li.classList.add('done-item');
+    if(!canGo && !cleared){ li.classList.add('disabled'); li.textContent=`・クエスト${q.id}　？？？？？？`; }
+    else{
+      li.dataset.id=q.id;
+      li.textContent=`${cleared?'●':'▶'}クエスト${q.id}　${q.name}　—　${q.sub}${(!cleared&&canGo)?'　◀ いまここ':''}`;
+    }
+    ul.appendChild(li);
+  });
+  const back=document.createElement('li');
+  back.dataset.act='back'; back.textContent='ギルドへ もどる';
+  ul.appendChild(back);
+  bindMenu(ul, li=>{
+    if(li.dataset.act==='back') return goScreen('scr-home');
+    openQuest(Number(li.dataset.id));
+  });
+}
+KEYS['scr-map'] = e=>{ $('map-list')._key && $('map-list')._key(e); };
+
+/* ---------- クエスト本文 ---------- */
+let curQuest=null, curPage=0;
+const questMenu=$('quest-menu');
+const questMenuCtl = bindMenu(questMenu, li=>{
+  if(li.dataset.act==='back') return goScreen('scr-map');
+  if(li.dataset.act==='battle') return startBattle({ type:'quest', quest:curQuest });
+});
+function openQuest(id){
+  curQuest=QUESTS.find(q=>q.id===id); curPage=0;
+  $('quest-no').textContent=`クエスト${curQuest.id}`;
+  $('quest-name').textContent=curQuest.name;
+  $('quest-sub').textContent=`〜 ${curQuest.sub} 〜　（完全版の本文と操作手順は教材Markdownの同名クエストへ）`;
+  questMenuCtl.reset();   /* 選択位置の残留を防ぐ（レビュー反映） */
+  goScreen('scr-quest');
+  renderQuestPage();
+}
+function renderQuestPage(){
+  const p=curQuest.pages[curPage];
+  $('qpage-title').textContent=p.t;
+  $('qpage-body').innerHTML=p.b
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/【(.+?)】/g,'<span class="em">【$1】</span>')
+    .replace(/\n/g,'<br>');
+  $('qpage-pos').textContent=`${curPage+1} ／ ${curQuest.pages.length}`;
+  $('qprev-hint').classList.toggle('dim', curPage===0);
+  $('qnext-hint').classList.toggle('dim', curPage===curQuest.pages.length-1);
+  /* 最終ページまで読んだら記録（初回のバトル解放条件。Codexレビュー反映） */
+  if(curPage===curQuest.pages.length-1 && !S.readQuests.includes(curQuest.id)){
+    S.readQuests.push(curQuest.id); save();
+  }
+  const cleared=S.cleared.includes(curQuest.id);
+  const readOK=cleared || S.readQuests.includes(curQuest.id);
+  const bi=$('quest-battle-item');
+  bi.classList.toggle('disabled', !readOK);
+  bi.textContent = cleared
+    ? 'バトルへ（復習モード・経験値なし）'
+    : readOK
+      ? `バトルへ すすむ（${curQuest.quiz.length}問中${curQuest.req}問正解でクリア）`
+      : 'バトルへ すすむ（→キーで本文を さいごのページまで読むと解放）';
+}
+KEYS['scr-quest'] = (e,k)=>{
+  if(k==='ArrowLeft'){ if(curPage>0){ curPage--; SFX.move(); renderQuestPage(); } e.preventDefault(); return; }
+  if(k==='ArrowRight'){ if(curPage<curQuest.pages.length-1){ curPage++; SFX.move(); renderQuestPage(); } e.preventDefault(); return; }
+  questMenu._key && questMenu._key(e);
+};
+
+/* ---------- バトル ---------- */
+const field=$('battle-field'), enemy=$('enemy'), dmgnum=$('dmgnum');
+const bmsg=$('battle-msg'), bcur=$('battle-cursor'), bks=$('battle-kaisetsu');
+const cmdwin=$('battle-cmd'), bMenu=$('battle-menu');
+let B=null;
+
+function startBattle(cfg){
+  const isQuest=cfg.type==='quest';
+  const mon=isQuest?cfg.quest.mon
+    :{ name:cfg.cat.enemy, sprite:cfg.cat.sprite, pal:cfg.cat.pal, boss:cfg.cat.boss };
+  B={ cfg, qs:isQuest?cfg.quest.quiz:cfg.cat.qs, idx:0, correct:0,
+      req:isQuest?cfg.quest.req:0,
+      replay:isQuest&&S.cleared.includes(cfg.quest.id), mon };
+  enemy.classList.remove('dead','hit');
+  enemy.classList.toggle('boss',!!mon.boss);
+  enemy.style.opacity=1;
+  renderSprite($('enemy-pix'),mon.sprite,mon.pal);
+  $('enemy-name').textContent=mon.name+(mon.desc?`（${mon.desc}）`:'');
+  cmdwin.style.display='none'; bks.style.display='none';
+  goScreen('scr-battle');
+  updateHUD();
+  battleSay(`${mon.name} が あらわれた！${B.replay?'\n（復習モード：経験値は入らない）':''}`, showQuestion);
+}
+function updateHUD(){
+  const lv=levelOf(S.xp);
+  $('hud-player').textContent=`${S.name}　Lv${lv.lv} ${lv.title}`;
+  $('hud-enemy').textContent='てき '+'●'.repeat(Math.max(0,B.qs.length-B.idx))+'○'.repeat(B.idx)+`　（正解 ${B.correct}）`;
+}
+function battleSay(text,done){
+  bks.style.display='none';
+  typewrite(bmsg,text,bcur,done);
+  bmsg.parentElement.onclick=()=>{
+    if(TYPE.active){ bmsg._skip=true; return; }
+    if(msgAdvance){ const f=msgAdvance; msgAdvance=null; SFX.ok(); f(); }
+  };
+}
+function showQuestion(){
+  if(B.idx>=B.qs.length){ return battleEnd(); }
+  const q=B.qs[B.idx];
+  updateHUD();
+  battleSay(`【だい${B.idx+1}もん】\n${q.q}`, ()=>{
+    bMenu.innerHTML='';
+    q.c.forEach((c,i)=>{
+      const li=document.createElement('li');
+      li.textContent=c; li.dataset.i=i;
+      bMenu.appendChild(li);
+    });
+    cmdwin.style.display='';
+    bindMenu(bMenu,onAnswer);
+  });
+}
+function onAnswer(li){
+  cmdwin.style.display='none';
+  const q=B.qs[B.idx];
+  const ok=Number(li.dataset.i)===q.a;
+  if(ok){
+    B.correct++;
+    if(B.cfg.type==='arena' && !S.arenaDone.includes(q.id)){
+      S.arenaDone.push(q.id); gainXP(10,'とうぎじょう初回正解');
+    }
+    battleSay(`${S.name}の こうげき！　かいしんの いちげき！`, ()=>{
+      enemy.classList.add('hit'); field.classList.add('shake');
+      dmgnum.textContent='10'; dmgnum.classList.add('pop'); SFX.dmg();
+      setTimeout(()=>{
+        field.classList.remove('shake'); enemy.classList.remove('hit'); dmgnum.classList.remove('pop');
+        B.idx++; afterAnswer(q,true);
+      },480);
+    });
+  } else {
+    field.classList.add('flash-red'); SFX.miss();
+    setTimeout(()=>field.classList.remove('flash-red'),320);
+    B.idx++;
+    battleSay(`ミス！　${B.mon.name}の はんげき！\n${S.name}は ひるんだ！`, ()=>afterAnswer(q,false));
+  }
+}
+function afterAnswer(q,ok){
+  bks.textContent=(ok?'':'せいかいは「'+q.c[q.a]+'」。\n')
+    +'かいせつ：'+q.ex+(q.rev?`\nふくしゅう先：${q.rev}`:'');
+  bks.style.display='block';
+  bcur.style.display='';
+  msgAdvance=()=>showQuestion();
+}
+function battleEnd(){
+  const isQuest=B.cfg.type==='quest';
+  const passed=isQuest?(B.correct>=B.req):true;
+  if(isQuest&&passed){
+    enemy.classList.add('dead');
+    const q=B.cfg.quest;
+    let msg=`${B.mon.name} を たおした！\n（${B.qs.length}問中 ${B.correct}問 せいかい）`;
+    if(!B.replay){
+      if(!S.defeated.includes(B.mon.key)) S.defeated.push(B.mon.key);
+      S.cleared.push(q.id);
+      logAdd(`クエスト${q.id}「${q.name}」クリア（${B.correct}/${B.qs.length}正解）`);
+      msg+=`\nけいけんち ${10*B.correct}＋クリア 50 かくとく！`;
+      gainXP(10*B.correct+50,`クエスト${q.id}クリア`);
+    }
+    /* 復習モードの勝利でも最終試練は解放する（レビュー反映） */
+    if(q.id===12 && !S.bossQuizOK){
+      S.bossQuizOK=true; save();
+      msg+=`\n\nさいしゅうしれんの 門が ひらいた！\n「じっせん」の ★最終ボス戦 に すすめ！`;
+    }
+    msg+='\n\n▼ Enter で ちずへ もどる';
+    battleSay(msg, ()=>{ msgAdvance=()=>goScreen('scr-map'); });
+  } else if(isQuest){
+    battleSay(
+      `${B.mon.name}は まだ げんきだ！\n（せいかい ${B.correct}／ひつよう ${B.req}）\n本文を よみなおして さいちょうせん しよう。\n\n▼ Enter で 本文へ もどる`,
+      ()=>{ msgAdvance=()=>openQuest(B.cfg.quest.id); });
+  } else {
+    const done=B.qs.every(q=>S.arenaDone.includes(q.id));
+    if(B.cfg.catKey==='boss' && B.correct>=3 && !S.bossQuizOK){ S.bossQuizOK=true; save(); }
+    battleSay(
+      `けっか：${B.qs.length}問中 ${B.correct}問 せいかい！\n${done?'この部の 全問を 討伐ずみだ。':''}\n\n▼ Enter で とうぎじょうへ もどる`,
+      ()=>{ msgAdvance=()=>goScreen('scr-arena'); });
+  }
+  updateHUD();
+}
+KEYS['scr-battle'] = e=>{
+  if(cmdwin.style.display!=='none'){ bMenu._key && bMenu._key(e); }
+};
+
+/* ---------- とうぎじょう ---------- */
+function renderArena(){
+  const ul=$('arena-menu'); ul.innerHTML='';
+  Object.entries(ARENA).forEach(([key,cat])=>{
+    const li=document.createElement('li');
+    const doneN=cat.qs.filter(q=>S.arenaDone.includes(q.id)).length;
+    const locked=(key==='boss')&&!S.cleared.includes(12);
+    if(locked){ li.classList.add('disabled'); li.innerHTML=`${cat.name}　<small>（クエスト12クリアで解放）</small>`; }
+    else{ li.dataset.key=key; li.innerHTML=`${cat.name}　<small>（${doneN}／${cat.qs.length} 討伐）</small>`; }
+    ul.appendChild(li);
+  });
+  const back=document.createElement('li');
+  back.dataset.act='back'; back.textContent='ギルドへ もどる';
+  ul.appendChild(back);
+  bindMenu(ul, li=>{
+    if(li.dataset.act==='back') return goScreen('scr-home');
+    startBattle({ type:'arena', cat:ARENA[li.dataset.key], catKey:li.dataset.key });
+  });
+}
+KEYS['scr-arena'] = e=>{ $('arena-menu')._key && $('arena-menu')._key(e); };
+
+/* ---------- じっせん ---------- */
+let curJissen=null, jdOpen=false;
+function renderJissen(){
+  jdOpen=false; $('jissen-detail').style.display='none';
+  const ul=$('jissen-menu'); ul.innerHTML='';
+  JISSEN.forEach(j=>{
+    const li=document.createElement('li');
+    const got=S.badges.includes(j.badge);
+    /* 段階解放: 前の課題のバッジが条件（Codexレビュー反映） */
+    let lockReason='';
+    if(j.needBossQuiz && !S.bossQuizOK) lockReason='クエスト12のバトルに勝つと解放';
+    else if(j.needBadge && !S.badges.includes(j.needBadge)) lockReason='前のレベルの課題を達成すると解放';
+    if(lockReason){ li.classList.add('disabled'); li.innerHTML=`${j.name}　<small>（${lockReason}）</small>`; }
+    else{ li.dataset.id=j.id; li.innerHTML=`${j.name}　<small>${got?'✔ 達成ずみ':''}</small>`; }
+    ul.appendChild(li);
+  });
+  const back=document.createElement('li');
+  back.dataset.act='back'; back.textContent='ギルドへ もどる';
+  ul.appendChild(back);
+  bindMenu(ul, li=>{
+    if(li.dataset.act==='back') return goScreen('scr-home');
+    openJissen(li.dataset.id);
+  });
+}
+function openJissen(id){
+  curJissen=JISSEN.find(j=>j.id===id); jdOpen=true;
+  $('jissen-title').textContent=curJissen.name;
+  $('jissen-desc').textContent=curJissen.desc;
+  const ul=$('jissen-check'); ul.innerHTML='';
+  const st=S.jissenChecks[id]||[];
+  curJissen.checks.forEach((c,i)=>{
+    const li=document.createElement('li');
+    li.classList.add('chk');
+    if(st.includes(i)) li.classList.add('done-item');
+    li.textContent=c; li.dataset.chk=i;
+    ul.appendChild(li);
+  });
+  const doneLi=document.createElement('li');
+  doneLi.dataset.act='done'; doneLi.textContent='★ すべて自分の目で確認した — 完了ほうこく';
+  ul.appendChild(doneLi);
+  const backLi=document.createElement('li');
+  backLi.dataset.act='back'; backLi.textContent='いちらんへ もどる';
+  ul.appendChild(backLi);
+  bindMenu(ul, li=>{
+    if(li.dataset.chk!==undefined){
+      const i=Number(li.dataset.chk);
+      const cur=S.jissenChecks[curJissen.id]||[];
+      const p=cur.indexOf(i);
+      if(p>=0) cur.splice(p,1); else cur.push(i);
+      S.jissenChecks[curJissen.id]=cur; save();
+      li.classList.toggle('done-item');
+      return;
+    }
+    if(li.dataset.act==='back'){ jdOpen=false; $('jissen-detail').style.display='none'; return; }
+    if(li.dataset.act==='done') jissenDone();
+  });
+  $('jissen-detail').style.display='';
+}
+function jissenDone(){
+  const st=S.jissenChecks[curJissen.id]||[];
+  if(st.length<curJissen.checks.length){
+    SFX.miss(); alert('まだ チェックしていない こうもくがある。\n実物のClaude Codeで確認してから チェックを入れよう。'); return;
+  }
+  if(S.badges.includes(curJissen.badge)){ SFX.ok(); alert('この課題は 達成ずみだ。'); return; }
+  S.badges.push(curJissen.badge);
+  logAdd(`実践クエスト達成：${curJissen.name} → ${curJissen.badgeName}`);
+  gainXP(curJissen.xp,curJissen.badgeName);
+  if(curJissen.id==='boss'){
+    if(!S.defeated.includes('boss')) S.defeated.push('boss');
+    save(); showEnding();
+  } else { save(); renderJissen(); }
+}
+KEYS['scr-jissen'] = e=>{
+  const ul=jdOpen?$('jissen-check'):$('jissen-menu');
+  ul._key && ul._key(e);
+};
+
+/* ---------- ずかん ---------- */
+function renderZukan(){
+  const grid=$('zukan-grid'); grid.innerHTML='';
+  const mons=QUESTS.map(q=>q.mon).concat(ZUKAN_EXTRA);
+  const seen=new Set(S.defeated);
+  if(S.badges.includes('shield')) seen.add('unchecked_plugin');
+  let n=0;
+  mons.forEach(m=>{
+    const got=seen.has(m.key);
+    if(got) n++;
+    const card=document.createElement('div');
+    card.className='win zukan-card'+(got?'':' unknown');
+    card.innerHTML=
+      `<div class="thumb"><div class="pix"></div></div>`+
+      `<div><h4>${got?m.name:'？？？？？？'}</h4><p>${got?m.desc:'まだ 出会っていない…'}</p></div>`;
+    grid.appendChild(card);
+    renderSprite(card.querySelector('.pix'), m.sprite, got?m.pal:'shadow');
+  });
+  $('zukan-title').textContent=`モンスターずかん（とうばつ ${n}／${mons.length}）`;
+}
+KEYS['scr-zukan'] = (e,k)=>{ if(k==='Enter'){ goScreen('scr-home'); e.preventDefault(); } };
+
+/* ---------- おきて ---------- */
+function renderOkite(){
+  $('okite-body').innerHTML=OKITE.map(([n,t])=>`<p><b>${n}</b>：${t}</p>`).join('')
+    +'<p style="color:var(--gray); font-size:15px;">補記：Claude Codeはbypass permissionsなど「確認を省略できる」設定も選べる道具。確認の責務は道具からあなたに移った。この掟はその責務の引き受け方である。（全文は教材H章）</p>'
+    +'<p style="color:var(--gray); font-size:15px;">誓うと 🔒 安全運用バッジ を獲得できる。</p>';
+  const ul=$('okite-menu'); ul.innerHTML='';
+  const sworn=S.badges.includes('shield');
+  const li=document.createElement('li');
+  if(sworn){ li.classList.add('disabled'); li.textContent='🔒 安全運用バッジ 取得ずみ'; }
+  else{ li.dataset.act='swear'; li.textContent='全条文を読み、守ることを誓う（🔒 安全運用バッジ）'; }
+  ul.appendChild(li);
+  const back=document.createElement('li');
+  back.dataset.act='back'; back.textContent='ギルドへ もどる';
+  ul.appendChild(back);
+  bindMenu(ul, li2=>{
+    if(li2.dataset.act==='back') return goScreen('scr-home');
+    if(li2.dataset.act==='swear'){
+      S.badges.push('shield');   /* 誓約の記録はバッジ'shield'が正 */
+      if(!S.defeated.includes('unchecked_plugin')) S.defeated.push('unchecked_plugin');
+      logAdd('ギルドの掟・全12条を読了し誓約 → 🔒 安全運用バッジ');
+      gainXP(50,'掟の誓約'); save(); renderOkite();
+    }
+  });
+}
+KEYS['scr-okite'] = e=>{ $('okite-menu')._key && $('okite-menu')._key(e); };
+
+/* ---------- にっし ---------- */
+function renderLog(){
+  const ul=$('log-list'); ul.innerHTML='';
+  [...S.log].reverse().forEach(en=>{
+    const li=document.createElement('li');
+    li.innerHTML=`<b>${en.d}</b>　${en.t}`;
+    ul.appendChild(li);
+  });
+  $('log-md').style.display='none'; $('log-copy-note').style.display='none';
+  const menu=$('log-menu'); menu.innerHTML='';
+  const ex=document.createElement('li');
+  ex.dataset.act='export'; ex.textContent='Obsidian用Markdownを書き出す';
+  menu.appendChild(ex);
+  const back=document.createElement('li');
+  back.dataset.act='back'; back.textContent='ギルドへ もどる';
+  menu.appendChild(back);
+  logMenuCtl = bindMenu(menu, li=>{
+    if(li.dataset.act==='back') return goScreen('scr-home');
+    exportLog();
+  });
+}
+let logMenuCtl=null;
+function exportLog(){
+  const lv=levelOf(S.xp);
+  const md=[
+    `# CLAUDE CODE QUEST しゅぎょう日誌`,``,
+    `- なまえ: ${S.name}`,
+    `- レベル: ${lv.lv}（${S.badges.includes('captain')?'工房マイスター':lv.title}）　累計XP: ${S.xp}`,
+    `- クエスト: ${S.cleared.length}/12 クリア　討伐: ${S.defeated.length}体`,
+    `- バッジ: ${S.badges.join(', ')||'なし'}`,
+    `- 開始日: ${S.created}　書き出し: ${new Date().toLocaleString('ja-JP')}`,
+    ``,`## 記録`,
+    ...S.log.map(e=>`- ${e.d} — ${e.t}`),
+  ].join('\n');
+  const ta=$('log-md');
+  ta.value=md; ta.style.display=''; $('log-copy-note').style.display='';
+  ta.onclick=()=>ta.select();
+  /* Enterでメニューへ復帰。stopPropagationしないと同じEnterがメニューに届き
+     書き出しが再実行されてループする（レビュー反映） */
+  ta.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); ta.blur(); } };
+  ta.focus(); ta.select();
+  if(logMenuCtl) logMenuCtl.setIndex(1);   /* 復帰先を「ギルドへ もどる」に */
+  SFX.save();
+}
+KEYS['scr-log'] = e=>{
+  /* テキストエリアにフォーカス中はコピー操作を妨げない */
+  if(document.activeElement===$('log-md')) return;
+  $('log-menu')._key && $('log-menu')._key(e);
+};
+
+/* ---------- エンディング ---------- */
+function showEnding(){
+  goScreen('scr-ending');
+  $('ending-roll').innerHTML=
+    `<p class="big">混沌竜ツカイワケズ を てなずけた！</p><br>`+
+    `<p>${S.name} は AIに 手を ゆだね、</p>`+
+    `<p>判断は ゆだねなかった。</p><br>`+
+    `<p class="big">称号『工房マイスター』 じゅよ</p><br>`+
+    `<p>― これからの 工房 ―</p>`+
+    `<p>一、じぶんの プロジェクトで、拡張を ひとつ ためすことから</p>`+
+    `<p>二、慣れてきたら Hook・MCP・サブエージェントを 組み合わせていく</p>`+
+    `<p>三、しくみが 変わったら、この教材じたいを 書き直しに もどる</p><br>`+
+    `<p style="color:var(--gray); font-size:15px;">五つの首は 今も 同時に鳴くが、あなたは もう まよわない。<br>— AI工房ギルド一同</p>`;
+  SFX.lvup();
+}
+KEYS['scr-ending'] = (e,k)=>{ if(k==='Enter'){ goScreen('scr-home'); e.preventDefault(); } };
+</script>
+</body>
+</html>
