@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CLAUDE CODE QUEST v1 — RPG型Claude Code学習アプリ</title>
+<title>CLAUDE CODE QUEST v2 — RPG型Claude Code学習アプリ</title>
 <!-- ドット字フォント（オンライン時のみ。オフライン時はMSゴシックで代替表示） -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   CLAUDE CODE QUEST v1 — ドラクエ風 RPG型Claude Code学習アプリ（単一HTML）
+   CLAUDE CODE QUEST v2 — ドラクエ風 RPG型Claude Code学習アプリ（単一HTML）
    操作: 十字キー（↑↓←→）＋ Enter のみで全操作可能（マウス併用可）
    進捗保存: ブラウザのlocalStorage
    ============================================================ */
@@ -341,7 +341,7 @@ textarea.dq{ width:100%; min-height:200px; background:#000; color:var(--white);
         </ul>
       </div>
       <p class="keyhint" style="margin-top:18px;"><b>↑↓</b>＝えらぶ　<b>Enter</b>＝けってい</p>
-      <p class="mock-note" style="margin-top:10px;">v1 ／ 進捗はこのブラウザ内に自動保存されます</p>
+      <p class="mock-note" style="margin-top:10px;">v2 ／ 進捗はこのブラウザ内に自動保存されます</p>
     </div>
   </section>
 
@@ -565,7 +565,7 @@ textarea.dq{ width:100%; min-height:200px; background:#000; color:var(--white);
     <p class="keyhint"><b>Enter</b>＝ギルドへ もどる</p>
   </section>
 
-  <p class="mock-note">CLAUDE CODE QUEST v1／非公式ファンメイド教材／教材正本: CLAUDE_CODE_RPG_LEARNING_FOR_AI_USERS.md／2026年7月時点のClaude Code仕様準拠</p>
+  <p class="mock-note">CLAUDE CODE QUEST v2／非公式ファンメイド教材／教材正本: CLAUDE_CODE_RPG_LEARNING_FOR_AI_USERS.md／2026年7月時点のClaude Code仕様準拠</p>
 </div>
 <script>
 /* ============================================================
@@ -969,7 +969,7 @@ const QUESTS = [
       c:['実行できる。Project（下位）よりUser（上位に近い設定として書かれた側）が勝つから','実行できない。permissionルールは通常キーと違い全階層からマージされ、denyが最優先されるから','実行できるが、確認だけは毎回出る'],
       a:1, ex:'通常の設定キーは上位スコープが下位を上書きするが、permissionルールだけは例外で全スコープからマージされる。一箇所でもdenyがあれば他のどのスコープのallowでも解禁できない。' },
     { q:'組織全体で bypassPermissions モードの使用自体を禁止したい。適切な方法はどれ？',
-      c:['各メンバーのUser settingsで個別に禁止を依頼する','Project settingsに禁止設定を書き、リポジトリにコミットする','Managed settingsで disableBypassPermissionsMode を設定する'],
+      c:['各メンバーのUser settingsで個別に禁止を依頼する','Project settingsに禁止設定を書き、リポジトリにコミットする','Managed settingsで permissions.disableBypassPermissionsMode を "disable" に設定する'],
       a:2, ex:'ユーザー・プロジェクト設定では上書きできない強制力が必要な場合はManaged settingsを使う。個人設定・プロジェクト設定は本人・チームの範囲でしか効かない。' },
   ]},
 { id:3, name:'常時の文脈CLAUDE.md', sub:'advisoryと200行問題', req:2,
@@ -996,7 +996,7 @@ const QUESTS = [
   mon:{ key:'honbun-slime', name:'本文べったりスライム', sprite:'slime', pal:'green',
         desc:'「本文を詳しく書けば発火する」と思わせるスライム。実際は発火判定の材料はfrontmatterのdescriptionだけで、本文の分量は一切関与しない。' },
   pages:[
-    { t:'結論', b:'Skill（Agent Skills、秘伝書）は、SKILL.mdというMarkdownファイル1枚を核に、Claudeが必要なタスクのときだけ読み込む指示・知識のフォルダである。\n\nfrontmatterにはnameとdescriptionが必須で、Claudeが「このSkillを今使うべきか」を判定する材料は、ほぼ【description】だけである。' },
+    { t:'結論', b:'Skill（Agent Skills、秘伝書）は、SKILL.mdというMarkdownファイル1枚を核に、Claudeが必要なタスクのときだけ読み込む指示・知識のフォルダである。\n\nfrontmatter（YAML形式のメタデータ）は全フィールドが仕様上任意だが、Claudeが「このSkillを今使うべきか」を判定する材料は、ほぼ【description】だけである（そのため実質的にはdescriptionを必ず書くべきである）。/skill-nameで呼び出す起動名は、nameを省略した場合はディレクトリ名がそのまま使われる。' },
     { t:'ものがたりと学び', b:'工房の奥に、鍵のかかった書庫がある。棚には背表紙だけが並び、中身は開くまで読めない。工房主のあなたは、この秘伝書の棚の使い方をクロードから教わることになった。\n\nスキルは3段階でコンテキストに取り込まれる（progressive disclosure）：\n①Discovery（起動時、nameとdescriptionのみ）\n②Activation（発火時、SKILL.md本文全体）\n③Resource loading（必要な時だけreferences/scripts/assets）' },
     { t:'しくみの詳細', b:'nameは最大64字・小文字数字ハイフンのみ・予約語（anthropic/claude）禁止。descriptionは最大1024字・改行なし推奨。\n\n配置スコープ：User scope（~/.claude/skills/、個人全プロジェクト）／Project scope（.claude/skills/、チーム共有）／Managed（組織全体）。\n\n起動方法は2種：/name での明示呼び出しと、Claudeがdescriptionを見て自動発火する方法。どちらも判定材料は同じくdescription。' },
     { t:'操作と失敗', b:'操作：.claude/skills/（スキル名）/SKILL.mdを作成し、descriptionに「何ができるか」「いつ使うか」を1行で具体的に書く。保存後はセッションを終了し、新セッションで自動発火するか確認する。\n\nよくある失敗：\n・本文だけ丁寧に書いてdescriptionを後回しにする→発火判定はdescriptionのみ\n・スコープを考えずとりあえずUser scopeに置く→チーム共有したい手順はProject scopeへ' },
@@ -1014,23 +1014,23 @@ const QUESTS = [
   ]},
 { id:5, name:'秘伝書 Skills II', sub:'発火しないときの診断', req:2,
   mon:{ key:'sokuseki-golem', name:'即席ゴーレム', sprite:'mimic', pal:'brown',
-        desc:'「セッション中に足したSkillはすぐ使える」と焦らせる急ごしらえの土人形。実際はスキルはセッション起動時にしかdiscoverされず、再起動するまで反映されない。' },
+        desc:'「Skillを追加・編集したら必ずセッションを再起動しないと反映されない」と思い込ませる急ごしらえの土人形。実際は既存のskillsディレクトリは監視されておりライブ反映される。再起動が要るのはトップレベルのskillsディレクトリを新規作成した時だけ。' },
   pages:[
-    { t:'結論', b:'Skillが発火しない原因の大半は、frontmatterの【パースエラー】（description改行、予約語、既知バグ）か、【セッションを再起動していない】ことのどちらかである。\n\n/doctorで症状を切り分け、原因ごとに対処すればほぼ確実に解決する。' },
-    { t:'ものがたりと学び', b:'新しく作った秘伝書が、棚に並んでいるはずなのに一向に出てこない。工房主は首をかしげる。「昨日足したばかりなのに、なぜ？」クロードは静かに答えた。「棚の点検には手順があります」\n\nスキルはセッション起動時にdiscover（検出）・load（読込）される。実行中のセッションに追加・編集しても、そのセッションには一切反映されない。' },
-    { t:'しくみの詳細', b:'原因は主に4つ：\n①description改行→パーサーがfrontmatterを読めず検出不可\n②セッション未再起動→追加・編集が反映されない\n③予約語やXMLタグ→frontmatter検証失敗\n④pathsフィールドの既知バグ→スキル全体が検出不可\n\n対策はYAML block scalar（description: ）で改行を安全にする、pathsを使わずdescriptionで示唆する、など。' },
-    { t:'操作と失敗', b:'操作：/doctorでスキルの検出状況を確認し、descriptionをわざと改行させて壊し、新規セッションで検出不可になることを確認する。block scalar形式に書き直し、再度検出されるか確認する。\n\nよくある失敗：\n・編集直後、同じセッションで「動かない」と焦る→まず再起動を疑う\n・pathsフィールドで限定しようとする→既知バグで検出不可になる' },
+    { t:'結論', b:'Skillが発火しない原因の大半は、【descriptionの具体性不足】か、frontmatterのYAMLパースエラーで自動発火の判定材料（description）が失われていることのどちらかである。パースエラーがあっても/skill-nameによる手動起動は動く。\n\nまた、Claude Codeは既存のskillsディレクトリを監視しており、その配下への追加・編集は現在のセッションにそのまま反映される。再起動が必要なのは、セッション開始時に存在しなかったトップレベルのskillsディレクトリを新規作成した場合だけである。\n\n/doctorで症状を切り分け、原因ごとに対処すればほぼ確実に解決する。' },
+    { t:'ものがたりと学び', b:'新しく作った秘伝書が、棚に並んでいるはずなのに一向に出てこない。工房主は首をかしげる。「昨日足したばかりなのに、なぜ？」クロードは静かに答えた。「棚の点検には手順があります」\n\nClaude Codeは既存のskillsディレクトリを監視しており、その配下への追加・編集は現在のセッションにそのまま反映される。再起動が必要になるのは、セッション開始時にまだ存在しなかったトップレベルのskillsディレクトリを新規作成した場合だけである。' },
+    { t:'しくみの詳細', b:'原因は主に4つ：\n①description改行等によるYAMLパースエラー→frontmatterが空メタデータとして読み込まれ、descriptionによる自動発火だけが失われる（/skill-nameでの手動起動は動く）\n②descriptionの内容が曖昧→frontmatterは正しくパースされるが自動発火の判定に負ける\n③name/descriptionの制約違反（予約語・XMLタグ等）→frontmatterの検証に失敗する\n④トップレベルのskillsディレクトリを新規作成した直後→そのディレクトリは監視対象外でそのセッションでは検出されない\n\n対策：①はYAML block scalar（description: ）で改行を安全にする、②はdescriptionを具体的に書き直す、③は/doctorで詳細エラーを確認する、④はセッションを再開する（既存ディレクトリ配下への追加・編集ならこの手順は不要）。\n\npathsフィールドは、グロブパターンで発火対象を絞り込める正式なoptionalフィールドである。' },
+    { t:'操作と失敗', b:'操作：/doctorでスキルの検出状況を確認し、descriptionをわざと改行させて壊す。既存の.claude/skills/配下の編集なので同じセッションのまま、自動発火はしなくなるが/skill-nameでの手動起動はできることを確認する。block scalar形式に書き直し、同じセッションのまま自動発火が復活することを確認する。\n\nよくある失敗：\n・既存skillsディレクトリ配下を編集しただけなのに律儀に毎回セッションを再起動する→再起動が必要なのはトップレベルディレクトリを新規作成した場合だけ\n・pathsフィールドの書式を確認せず使い、意図したファイルで発火しない→グロブパターンが対象と一致しているか見直す' },
   ],
   quiz:[
-    { q:'ログファイルを分析するスキルを作った。分析中に誤ってユーザーのファイルを削除・編集されるのを防ぎたい。どのallowed-tools設定が適切か？',
-      c:['allowed-tools: [Read, Execute, Write]','allowed-tools: [Read, Grep, Glob]','allowed-toolsを指定しない'],
-      a:1, ex:'ログ分析は読み取り専用タスク。[Read, Grep, Glob]は読込・検索のみを許可し削除・編集は不可能にする。' },
+    { q:'ログ分析スキルにallowed-tools: [Read, Grep, Glob]と設定した。スキルが有効な間にClaudeがWriteツールでファイルを書き換えようとした場合、どうなるか？',
+      c:['Writeはallowed-toolsに含まれていないため、確認なしで即座にエラーになり実行できない','Writeは事前承認リストに入っていないだけで、通常のpermission設定（allow/ask/deny）に従って使用できる（確認プロンプトが省略されないだけ）','allowed-toolsに列挙されていないツールは、このスキルが有効な間セッション全体で使用禁止になる'],
+      a:1, ex:'allowed-toolsは「スキル有効中に確認なしで使ってよいツール」を事前承認する仕組みであり、ツールの使用そのものを制限する機能ではない。列挙していないWriteも、denyされていなければ通常通り使用できる。本当に使わせたくない場合はdisallowed-toolsやpermissionsのdenyルールで明示的に締め出す必要がある。' },
     { q:'次のfrontmatterのうち、パースに失敗する可能性がある（またはスキルが検出不可になる）ものはどれか。\n①description改行の恐れがある長文（block scalar未使用）\n②nameに予約語「anthropic」を含む\n③YAML block scalarで正しく複数行化されている',
       c:['①と②','②と③','①のみ'],
       a:0, ex:'①はフォーマッターによる自動改行でパースエラーを起こす可能性が高い。②はnameに予約語「anthropic」を含み検出不可になる。③はblock scalarを正しく使っているため問題ない。' },
-    { q:'現在のClaude Codeセッションを実行中に、新しいスキルをプロジェクトの.claude/skills/my-skill/SKILL.mdに追加した。そのセッション内で新しいスキルを使えるか？',
-      c:['はい、すぐに使える','いいえ、セッションを再開した後に使える','/refreshコマンドで即座に読み込める'],
-      a:1, ex:'スキルはセッション起動時にdiscover・loadされる。実行中に追加されたスキルは現在のセッションでは検出されない。' },
+    { q:'現在のClaude Codeセッションを実行中に、次の2つのケースを行った。それぞれ、そのセッション内で新しいスキルを使えるか？\nケースA: 既に存在していた.claude/skills/ディレクトリの中に、新しいスキルmy-skill/SKILL.mdを追加した\nケースB: このプロジェクトには.claude/skills/ディレクトリ自体がまだ存在しておらず、それを新規作成してその中にmy-skill/SKILL.mdを追加した',
+      c:['ケースA・ケースBともに、そのセッション内ですぐ使える','ケースAはそのセッション内ですぐ使えるが、ケースBはセッションを再開するまで使えない','ケースA・ケースBともに、セッションを再開するまで使えない'],
+      a:1, ex:'Claude Codeは既存のskillsディレクトリを監視しており、その配下への追加・編集は現在のセッションにそのまま反映される（ケースA）。一方、セッション開始時に存在しなかったトップレベルのskillsディレクトリを新規作成した場合は、その監視自体がまだ始まっていないため現在のセッションでは検出されない（ケースB）。急ぎたい場合は/reload-skills（v2.1.152〜）でも手動で再読込できる。' },
   ]},
 { id:6, name:'自動仕掛け Hooks I', sub:'deterministicな自動仕掛け', req:2,
   mon:{ key:'onegai-sprite', name:'お願いスプライト', sprite:'demon', pal:'reddemon',
@@ -1058,13 +1058,13 @@ const QUESTS = [
   pages:[
     { t:'結論', b:'Hookの実行結果は、exit codeで扱いが完全に分かれる。\n【exit 0】のときだけstdoutのJSONが処理され、【exit 2】のときはstderrのみが処理されてブロックが発生する。\n\nexit 0とexit 2は排他的で、両方を同時に使うことはできない。ブロックしたいならstderrに書いてexit 2、構造化した決定を返したいならexit 0でJSONを出力する。' },
     { t:'ものがたりと学び', b:'工房主は「危険な操作は止めて、かつ詳しい報告も出したい」と欲張った設定を書いたが、仕掛けは動かなかった。合図は一度に一種類しか出せない。\n\n二刀流ウィスプの正体は【exit codeの排他性】への誤解。exit 2でブロックしつつ同時にJSONで詳細な決定も伝えられる、と思い込ませてくる。\n\n実際にはexit codeが0のときだけJSONが処理され、2のときはJSONは無視されstderrだけが処理される。' },
-    { t:'しくみの詳細', b:'返却方法は4パターン。\nexit 0：通常フロー続行（JSON処理あり）\nexit 0＋JSON：構造化された決定（パーミッション制御等）\nexit 2＋stderr：ブロッキングエラー（JSON処理されない）\n他のexit code：非ブロッキングエラー\n\n【if】フィールドはmatcherをさらに絞り込む補助で、matcherの代替にはならない。ifだけを設定しmatcherを省略すると、フック自体が発火しない。\n\nハンドラー型は【command/http/mcp_tool/prompt/agent】の5種。複数フック並列実行時は最も制限的な判定（deny＞defer＞ask＞allow）が優先される。' },
-    { t:'操作と失敗', b:'操作：.claude/hooks/にrm -rfを検出してexit 2でブロックするスクリプトを作り、chmod +xで実行権限を付与する。settings.jsonにmatcher:"Bash"＋if:"Bash(rm *)"の設定を追加し、/hooksで登録内容を確認する。\n\nよくある失敗：\n・ブロックしたいのにexit 2とJSON出力を両方書いてしまう→exit 2の場合JSONは無視される\n・ifだけ設定してmatcherを省略する→フックが一度も発火しない' },
+    { t:'しくみの詳細', b:'返却方法は4パターン。\nexit 0：通常フロー続行（JSON処理あり）\nexit 0＋JSON：構造化された決定（PreToolUseはhookSpecificOutput形式、それ以外のイベントはトップレベルのdecision形式）\nexit 2＋stderr：ブロッキングエラー（JSON処理されない）\n他のexit code：非ブロッキングエラー\n\nmatcherは省略・空文字・"*"のいずれでも全件マッチする。【if】はmatcherとは独立した条件で、tool系イベント（PreToolUse／PostToolUse／PostToolUseFailure／PermissionRequest／PermissionDenied）でのみ評価される。それ以外のイベントにifを設定すると評価されず、フック自体が発火しない。\n\nハンドラー型は【command/http/mcp_tool/prompt/agent】の5種。複数フック並列実行時は最も制限的な判定（deny＞defer＞ask＞allow）が優先される。' },
+    { t:'操作と失敗', b:'操作：.claude/hooks/にrm -rfを検出してexit 2でブロックするスクリプトを作り、chmod +xで実行権限を付与する。settings.jsonにmatcher:"Bash"＋if:"Bash(rm *)"の設定を追加し、/hooksで登録内容を確認する。\n\nよくある失敗：\n・ブロックしたいのにexit 2とJSON出力を両方書いてしまう→exit 2の場合JSONは無視される\n・tool系イベント以外（Stop・SessionStart等）にifを設定してしまう→ifが評価されるのはPreToolUse／PostToolUse／PostToolUseFailure／PermissionRequest／PermissionDeniedのみ。それ以外のイベントで設定すると評価されず発火しない' },
   ],
   quiz:[
-    { q:'あるPreToolUseフックスクリプトが、危険コマンドを検出したので echo \'{"decision": "block", "reason": "dangerous"}\' を出力し、exit 2で終了した。この場合、Claude Codeはどう扱うか？',
-      c:['JSONのdecision通りにブロックし、reasonをClaudeに伝える','exit 2なのでJSONは無視され、stderrの内容だけが処理される（この例ではstderrに何も書いていないため理由が伝わらない可能性が高い）','exit codeよりJSONの内容が常に優先されるため、正常にブロック理由が伝わる仕様である'],
-      a:1, ex:'exit codeが2の場合、stdoutのJSONは無視されstderrのみが処理される。ブロック理由を伝えるにはstderrに書く必要がある。' },
+    { q:'あるPreToolUseフックスクリプトが、危険コマンドを検出したので echo \'{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "dangerous"}}\' を出力し、exit 2で終了した。この場合、Claude Codeはどう扱うか？',
+      c:['JSONのpermissionDecision通りにdenyし、reasonをClaudeに伝える','exit 2なのでJSONは無視され、stderrの内容だけが処理される（この例ではstderrに何も書いていないため理由が伝わらない可能性が高い）','exit codeよりJSONの内容が常に優先されるため、正常にdeny理由が伝わる仕様である'],
+      a:1, ex:'exit codeが2の場合、stdoutのJSONは無視されstderrのみが処理される。PreToolUseで構造化した決定を伝えたいならexit 0でhookSpecificOutputのpermissionDecisionを使うが、この例はexit 2のためJSON自体が読まれず、理由はstderrに書く必要がある。' },
     { q:'同一のPreToolUse・同一matcherに2つのフックが定義されている。1つ目は通過（exit 0）、2つ目はブロック（exit 2）を返した場合、Claudeがrm -rf /tmpを実行しようとした時の結果は？',
       c:['1つ目は実行されずスキップされ、2つ目だけ実行される','両方並列実行され、1つ目は成功、2つ目がブロック→ブロック結果が優先される','1つ目の副作用（ログ書き込み等）がアンドゥされる'],
       a:1, ex:'複数フックは並列実行され、permission decisionは最も制限的な判定（deny）が優先される。ただし先に完了した副作用は取り消されない。' },
@@ -1304,7 +1304,7 @@ const JISSEN = [
       '練習用リポジトリの.claude/skills以下にSKILL.mdを作成した',
       'frontmatterのdescriptionに「何をするか」と「いつ使うか」の両方を書いた',
       '本文に、実行すれば結果が目に見える簡単な指示を1つ書いた',
-      '新規セッションを開始してから動作を確認した（実行中セッションでは反映されないため）',
+      '既存の.claude/skills/があればそのまま同セッションで確認できる。skillsディレクトリ自体を新規作成した場合のみ新規セッションで確認した',
       'descriptionにマッチする依頼で自動発火するか確認し、発火しなければ明示起動で切り分けた',
       '/doctorでSkillが認識されているかを確認した',
       'SKILL.md以外のファイルが変更されていないことを確認した',
@@ -1343,7 +1343,7 @@ const OKITE = [
   ['第六条','matcherを空にした全承認のPermissionRequestフックを組まない。matcherは極力狭く指定し、危険操作は必ずdenyに倒す。'],
   ['第七条','変更を自動でcommit・pushする仕組みを組まない。commitとpushは、必ず人間がdiffを確認した後に手動で行う。'],
   ['第八条','認証情報をMCPサーバー設定ファイルに直書きしない。環境変数展開などで渡し、コミット前に中身を必ず目視する。'],
-  ['第九条','mcp__のようなツールの一括allowをしない。個別ツール単位でallow・askを設計し、書き込み系の呼び出しはaskに留める。'],
+  ['第九条','裸のmcp__*をallowに書いても警告付きでスキップされ何も承認されない。危険なのはmcp__server__*のようにサーバー名を明記した丸ごとallowで、そのサーバーの全ツールが無確認で通ってしまう。個別ツール単位でallow・askを設計し、書き込み系はaskに留める。'],
   ['第十条','AIが提示したdiffやコード提案を見ずに取り込まない。実装した本人は自分の変更に肩入れしがちなので、フレッシュな立場でのレビューも併用し、内容を理解してから採用する。'],
   ['第十一条','401や403のエラーは認証未完了のサインであり、故障として騒がない。/mcpからのOAuth再認可フローで解決する。'],
   ['第十二条','困っていないのに拡張機能・権限・ツールを先回りで足さない。不要な拡張はコンテキスト税と攻撃面の両方を増やす。導入は実際に困りごとが起きてから行う。'],

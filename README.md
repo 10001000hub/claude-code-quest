@@ -51,4 +51,5 @@
 
 ## 更新履歴
 
+- **v2**（2026-07-04）Codexレビューを反映し、公式ドキュメントと突き合わせて12件を修正（Skillsのライブ反映と`paths`・`allowed-tools`の正しい仕様、frontmatter破損時の挙動、PreToolUseの構造化出力形式、matcher/`if`の挙動、MCPツール一括allowの挙動、`permissions.disableBypassPermissionsMode`の正確な表記など）
 - **v1**（2026-07-04）初公開。Skills / Hooks / MCP / サブエージェント＋共通基盤の12クエスト、クイズ68問、チュートリアル14ステップ
